@@ -28,9 +28,7 @@ DOCKER_IMAGE_TAG="${IMAGE_NAME}:latest" # Using 'latest' tag for simplicity
 
 # --- Build Docker Image Locally ---
 echo "Building Docker image locally: ${DOCKER_IMAGE_TAG}"
-cp ../../requirements.txt requirements.txt
 docker build -t "${DOCKER_IMAGE_TAG}" .
-rm requirements.txt
 
 if [ $? -ne 0 ]; then
     echo "Local Docker image build failed. Exiting."

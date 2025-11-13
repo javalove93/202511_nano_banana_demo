@@ -22,6 +22,9 @@ os.makedirs(LOCAL_CACHE, exist_ok=True)
 # .env 파일에서 환경 변수 로드
 load_dotenv()
 
+FIRESTORE_COLLECTION_ID = os.environ.get('FIRESTORE_COLLECTION_ID', 'nanobanana')
+FIRESTORE_DATABASE_ID = os.environ.get('FIRESTORE_DATABASE_ID')
+
 def parse_gcs_path(gcs_path):
     if gcs_path.startswith("gs://"):
         path_parts = gcs_path[len("gs://"):].split("/", 1)
@@ -44,7 +47,10 @@ if not firebase_admin._apps:
         'storageBucket': gcs_bucket_name # Use parsed bucket name
     })
 
-db = firestore.client()
+if FIRESTORE_DATABASE_ID:
+    db = firestore.client(database=FIRESTORE_DATABASE_ID)
+else:
+    db = firestore.client()
 gcs_client = gcs.Client()
 
 
@@ -234,7 +240,7 @@ def save_nano_banana_demo():
             app_logger.info(f"Uploaded PNG image to GCS: {gcs_filename}")
 
         # Save demo details to Firestore
-        doc_ref = db.collection('nanobanana').document()
+        doc_ref = db.collection(FIRESTORE_COLLECTION_ID).document()
         doc_ref.set({
             'title': title,
             'fixed_prompt_header': fixed_prompt_header, # Save separately
@@ -256,7 +262,7 @@ def list_nano_banana_demos():
     app_logger = current_app.logger
     app_logger.info("Starting list demos process...")
     try:
-        demos_ref = db.collection('nanobanana').order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
+        demos_ref = db.collection(FIRESTORE_COLLECTION_ID).order_by('timestamp', direction=firestore.Query.DESCENDING).stream()
         demos_list = []
         for doc in demos_ref:
             demo_data = doc.to_dict()
