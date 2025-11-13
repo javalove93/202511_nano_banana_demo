@@ -1,0 +1,2062 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이미지 편집기</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 10px 20px;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            flex: 1;
+            padding: 20px;
+            gap: 20px;
+        }
+        .image-editor-panel {
+            flex: 3;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; /* Align items to the top */
+            /* justify-content: center; */ /* Remove or comment out to prevent vertical centering */
+            padding: 20px;
+        }
+        .image-display-area {
+            width: 100%;
+            min-height: 400px; /* Minimum height for the display area */
+            height: auto; /* Allow height to adjust based on content */
+            border: 2px dashed #ccc;
+            display: flex;
+            /* align-items: center; */ /* Remove or comment out */
+            /* justify-content: center; */ /* Remove or comment out */
+            margin-bottom: 20px;
+            overflow: hidden; /* Prevent scrollbars */
+            background-color: #e9e9e9;
+            position: relative; /* Ensure canvas is positioned correctly */
+            max-width: 1024px; /* Set max width for the display area */
+            max-height: 1024px; /* Set max height for the display area */
+        }
+        .image-wrapper {
+            position: relative;
+            display: inline-block;
+            max-width: 1024px; /* Limit wrapper size */
+            max-height: 1024px; /* Limit wrapper size */
+        }
+        .image-display-area img {
+            max-width: none; /* Allow image to exceed parent width */
+            max-height: none; /* Allow image to exceed parent height */
+            /* object-fit: contain; */ /* Remove or comment out */
+        }
+        .controls {
+            /* display: flex; */ /* Remove flex from controls */
+            /* gap: 10px; */ /* Remove gap from controls */
+            margin-top: 20px;
+            width: 100%; /* Ensure controls takes full width */
+        }
+        .button-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px; /* Add some space between buttons and textarea */
+            flex-wrap: wrap; /* Allow buttons to wrap if screen is too small */
+            width: 100%;
+        }
+        .sidebar {
+            flex: 1;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto; /* Allow scrolling if content overflows */
+        }
+        .sidebar h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .sidebar button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .sidebar button:hover {
+            background-color: #0056b3;
+        }
+        #generateBtn {
+            background-color: #28a745; /* Green color for generate button */
+        }
+        #generateBtn:hover {
+            background-color: #218838;
+        }
+        .image-editor-panel h3 {
+            align-self: flex-start; /* Align Editor title to the start (left) */
+            margin-top: 0;
+            color: #333;
+            display: inline-block; /* Allow h3 to be in line with other elements */
+            margin-right: 10px; /* Add some space between title and links */
+        }
+        .size-options {
+            display: inline-block; /* Ensure links are in line with h3 */
+            font-size: 14px;
+        }
+        .size-options a {
+            color: #007bff;
+            text-decoration: none;
+            margin: 0 5px;
+        }
+        .size-options a:hover {
+            text-decoration: underline;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .custom-file-upload {
+            border: 1px solid #ccc;
+            display: inline-block;
+            padding: 8px 12px;
+            cursor: pointer;
+            background-color: #e9e9e9;
+            border-radius: 5px;
+        }
+        .custom-file-upload:hover {
+            background-color: #dcdcdc;
+        }
+        .prompt-textarea {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .image-placeholder {
+            display: none; /* Hide placeholders initially */
+        }
+        .image-placeholder.active {
+            border: 2px solid #007bff; /* Highlight selected image */
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+        .image-placeholder .image-number {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            z-index: 10;
+        }
+        .image-placeholder .image-checkbox {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            z-index: 10;
+        }
+        /* Custom cursors */
+        /* .brush-cursor {
+            cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewport='0 0 24 24' version='1.1'><circle cx='12' cy='12' r='10' stroke='black' stroke-width='1' fill='red' /></svg>") 12 12, auto;
+        }
+        .eraser-cursor {
+            cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewport='0 0 24 24' version='1.1'><circle cx='12' cy='12' r='10' stroke='black' stroke-width='1' fill='none' /></svg>") 12 12, auto;
+        } */
+        .crosshair-cursor {
+            cursor: crosshair;
+        }
+        .mask-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            opacity: 1; /* Make canvas fully opaque */
+        }
+        .pasted-image-container {
+            position: absolute;
+            border: 1px dashed #007bff;
+            overflow: hidden;
+            background-color: rgba(0, 123, 255, 0.1);
+            z-index: 5;
+            display: none; /* Hide until an image is pasted */
+            cursor: grab;
+        }
+        .pasted-image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none; /* Allow events to pass through to the container for dragging/resizing */
+        }
+        .resizer {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #007bff;
+            border: 1px solid #fff;
+            border-radius: 50%;
+            z-index: 6;
+        }
+        .resizer.top-left {
+            top: -5px;
+            left: -5px;
+            cursor: nwse-resize;
+        }
+        .resizer.top-right {
+            top: -5px;
+            right: -5px;
+            cursor: nesw-resize;
+        }
+        .resizer.bottom-left {
+            bottom: -5px;
+            left: -5px;
+            cursor: nesw-resize;
+        }
+        .resizer.bottom-right {
+            bottom: -5px;
+            right: -5px;
+            cursor: nwse-resize;
+        }
+    </style>
+    <style>
+        /* Modal Styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            justify-content: center; /* Center content horizontally */
+            align-items: center; /* Center content vertically */
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto; /* Center the modal vertically and horizontally */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            max-width: 700px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.20), 0 6px 20px 0 rgba(0,0,0,0.19);
+            position: relative; /* Needed for absolute positioning of close button */
+        }
+
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute; /* Position relative to modal-content */
+            right: 20px;
+            top: 10px;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .demo-list {
+            margin-top: 20px;
+            max-height: 400px; /* Make list scrollable */
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .demo-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+
+        .demo-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .demo-item:last-child {
+            border-bottom: none;
+        }
+
+        .demo-item h4 {
+            margin: 0;
+            color: #333;
+        }
+
+        .demo-item p {
+            margin: 5px 0 0;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>이미지 편집기</h1>
+    </header>
+    <div class="container">
+        <div class="image-editor-panel">
+            <h3>Editor</h3>
+            <span class="size-options">
+                <a href="#" id="sizeLarge">Large</a> |
+                <a href="#" id="sizeMedium">Medium</a> |
+                <a href="#" id="sizeSmall">Small</a>
+            </span>
+            <div class="image-display-area">
+                <div class="image-wrapper">
+                    <img id="uploadedImage" src="#" alt="업로드된 이미지" style="display: none;">
+                    <canvas id="maskCanvas" class="mask-overlay" style="display:none;" willReadFrequently="true"></canvas>
+                    <canvas id="guideCanvas" class="mask-overlay" style="display: none; z-index: 10; opacity: 0; pointer-events: none;" width="800" height="800"></canvas> <!-- Modified for guide lines - Set pointer-events to none -->
+                </div>
+                <p id="placeholderText">이미지를 여기에 드롭하거나 업로드하세요</p>
+                <div id="pastedImageContainer" class="pasted-image-container">
+                    <img id="pastedImage" src="#" alt="붙여넣은 이미지">
+                    <div class="resizer top-left"></div>
+                    <div class="resizer top-right"></div>
+                    <div class="resizer bottom-left"></div>
+                    <div class="resizer bottom-right"></div>
+                </div>
+            </div>
+            <div class="controls">
+                <div class="button-row">
+                    <label for="imageUpload" class="custom-file-upload">
+                        Load Image
+                    </label>
+                    <input type="file" id="imageUpload" accept="image/*" multiple>
+                    <button type="button" id="pasteFromClipboardBtn" class="custom-file-upload">From Clipboard</button>
+                    <button type="button" id="newImageBtn">New</button>
+                    <button type="button" id="brushBtn">Brush</button>
+                    <button type="button" id="eraserBtn">Eraser</button>
+                    <button type="button" id="boxBtn">Box</button>
+                    <button type="button" id="clearCanvasBtn">Clear Canvas</button>
+                    
+                    <button type="button" id="saveBtn">Save</button>
+                    
+                    <button type="button" id="generateBtn">Generate</button>
+                    <button type="button" id="saveDemoBtn">Save Demo</button>
+                    <button type="button" id="loadDemoBtn">Load Demo</button>
+                </div>
+                <div style="margin-top: 10px;">
+                    <label for="brushColor">색상:</label>
+                    <input type="color" id="brushColor" value="#ff0000" style="margin-right: 15px;">
+                    <label for="brushThickness">두께:</label>
+                    <input type="range" id="brushThickness" min="1" max="50" value="10">
+                    <span id="currentThickness">10</span>px
+                    <label for="imageWidth" style="margin-left: 15px;">Width:</label>
+                    <input type="number" id="imageWidth" value="800" style="width: 80px;">
+                    <label for="imageHeight" style="margin-left: 15px;">Height:</label>
+                    <input type="number" id="imageHeight" value="800" style="width: 80px;">
+                    <label for="coworkingCheckbox" style="margin-left: 15px;">Coworking:</label>
+                    <input type="checkbox" id="coworkingCheckbox">
+                    <label for="sketchCheckbox" style="margin-left: 15px;">Sketch:</label>
+                    <input type="checkbox" id="sketchCheckbox">
+                </div>
+                <div style="margin-top: 10px;">
+                    <input type="text" id="fixedPromptHeader" value="Create an image that is, " style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; margin-bottom: 10px;">
+                    <textarea id="promptTextarea" class="prompt-textarea" placeholder="프롬프트를 입력하세요..." rows="4"></textarea>
+                </div>
+                <div id="textResponseArea" style="margin-top: 10px; padding: 10px; border: 1px solid #eee; border-radius: 5px; background-color: #f9f9f9; min-height: 50px;">
+                    <!-- 텍스트 응답이 여기에 표시됩니다. -->
+                </div>
+            </div>
+        </div>
+        <div class="sidebar">
+            <h3>Images</h3>
+            <div class="button-row" style="margin-bottom: 10px;">
+                <button type="button" id="checkAllBtn" style="width: 20%; font-size: 0.7em;">Check All</button>
+                <button type="button" id="uncheckAllBtn" style="width: 25%; font-size: 0.7em;">Uncheck All</button>
+                <button type="button" id="deleteImagesBtn" style="width: 20%; font-size: 0.7em;">Delete</button>
+                <button type="button" id="downloadBtn" style="width: 20%; font-size: 0.7em; background-color: #007bff;">Download</button>
+            </div>
+            
+            
+            
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const generateBtn = document.getElementById('generateBtn');
+            
+            const imageUpload = document.getElementById('imageUpload');
+            const uploadedImage = document.getElementById('uploadedImage');
+            const placeholderText = document.getElementById('placeholderText');
+            const imageDisplayArea = document.querySelector('.image-display-area');
+            const sidebar = document.querySelector('.sidebar');
+            const maskCanvas = document.getElementById('maskCanvas');
+            const ctx = maskCanvas.getContext('2d');
+            const textResponseArea = document.getElementById('textResponseArea'); // Add this line
+            const checkAllBtn = document.getElementById('checkAllBtn'); // Add this line
+            const uncheckAllBtn = document.getElementById('uncheckAllBtn'); // Add this line
+            const coworkingCheckbox = document.getElementById('coworkingCheckbox'); // Add this line
+            const guideCanvas = document.getElementById('guideCanvas'); // Add this line
+            const guideCtx = guideCanvas.getContext('2d'); // Add this line
+
+            // Drawing tool buttons
+            const brushBtn = document.getElementById('brushBtn');
+            const eraserBtn = document.getElementById('eraserBtn');
+            const clearCanvasBtn = document.getElementById('clearCanvasBtn');
+            const boxBtn = document.getElementById('boxBtn');
+            const newImageBtn = document.getElementById('newImageBtn'); // Added for new image button
+            const deleteImagesBtn = document.getElementById('deleteImagesBtn'); // Added for delete images button
+            const saveBtn = document.getElementById('saveBtn'); // Added for save button
+            const downloadBtn = document.getElementById('downloadBtn'); // Added for download button
+            const brushThicknessSlider = document.getElementById('brushThickness');
+            const currentThicknessSpan = document.getElementById('currentThickness');
+            const imageWidthInput = document.getElementById('imageWidth');
+            const imageHeightInput = document.getElementById('imageHeight');
+            const brushColorInput = document.getElementById('brushColor'); // Add this line
+            const fixedPromptHeaderInput = document.getElementById('fixedPromptHeader'); // Add this line
+            const sketchCheckbox = document.getElementById('sketchCheckbox'); // Add this line
+
+            const sizeLargeLink = document.getElementById('sizeLarge');
+            const sizeMediumLink = document.getElementById('sizeMedium');
+            const sizeSmallLink = document.getElementById('sizeSmall');
+            const saveDemoBtn = document.getElementById('saveDemoBtn'); // Add this line
+            const loadDemoBtn = document.getElementById('loadDemoBtn'); // Add this line
+            const pasteFromClipboardBtn = document.getElementById('pasteFromClipboardBtn'); // Add this line
+            const loadDemoModal = document.getElementById('loadDemoModal'); // Add this line
+            const closeButton = document.querySelector('.close-button'); // Add this line
+            const demoList = document.getElementById('demoList'); // Add this line
+            const demoSearchInput = document.getElementById('demoSearchInput'); // Add this line
+
+            let currentFixedSize = parseInt(imageWidthInput.value); // Initialize with current input value
+
+            const promptHistoryModal = document.getElementById('promptHistoryModal');
+            const closePromptHistoryButton = document.getElementById('closePromptHistoryButton');
+            const promptHistoryList = document.getElementById('promptHistoryList');
+            const promptHistorySearchInput = document.getElementById('promptHistorySearchInput');
+
+            // Function to set canvas size and disable inputs
+            function setCanvasSize(size, clickedLink) {
+                const width = size;
+                const height = size;
+                currentFixedSize = size; // Update the global fixed size
+
+                imageWidthInput.value = width;
+                imageHeightInput.value = height;
+
+                uploadedImage.width = width;  
+                uploadedImage.height = height;
+                uploadedImage.style.width = width + 'px';
+                uploadedImage.style.height = height + 'px';
+
+                maskCanvas.width = width;
+                maskCanvas.height = height;
+                maskCanvas.style.width = width + 'px';
+                maskCanvas.style.height = height + 'px';
+
+                guideCanvas.width = width; // Set guideCanvas size
+                guideCanvas.height = height; // Set guideCanvas size
+                guideCanvas.style.width = width + 'px'; // Set guideCanvas style size
+                guideCanvas.style.height = height + 'px'; // Set guideCanvas style size
+                guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height); // Clear guideCanvas
+
+                ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                resetDrawingContext();
+
+                imageWidthInput.disabled = true;
+                imageHeightInput.disabled = true;
+
+                // Hide placeholder and show image/canvas if not already visible
+                placeholderText.style.display = 'none';
+                uploadedImage.style.display = 'block';
+                maskCanvas.style.display = 'block';
+                guideCanvas.style.display = 'block'; // Show guideCanvas
+
+                // Update bold style for size links
+                [sizeLargeLink, sizeMediumLink, sizeSmallLink].forEach(link => {
+                    link.style.fontWeight = 'normal';
+                });
+                if (clickedLink) {
+                    clickedLink.style.fontWeight = 'bold';
+                }
+
+                // If an image is already loaded, redraw it on the new canvas size
+                if (uploadedImage.src && uploadedImage.src !== '#' && uploadedImage.style.display !== 'none') {
+                    const tempImage = new Image();
+                    tempImage.onload = () => {
+                        ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                        // Calculate dimensions to fit the existing image into the new square canvas, maintaining aspect ratio
+                        const { width: scaledWidth, height: scaledHeight } = calculateAspectFitDimensions(tempImage.naturalWidth, tempImage.naturalHeight, width, height);
+                        
+                        // Center the image within the square canvas
+                        const offsetX = (width - scaledWidth) / 2;
+                        const offsetY = (height - scaledHeight) / 2;
+
+                        ctx.drawImage(tempImage, offsetX, offsetY, scaledWidth, scaledHeight);
+                        // Update uploadedImage dimensions as well
+                        uploadedImage.width = scaledWidth;
+                        uploadedImage.height = scaledHeight;
+                        uploadedImage.style.width = scaledWidth + 'px';
+                        uploadedImage.style.height = scaledHeight + 'px';
+
+                        resetDrawingContext();
+                    };
+                    tempImage.src = uploadedImage.src;
+                } else {
+                    // If no image is loaded, just clear the canvas
+                    ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                    resetDrawingContext();
+                    // Show placeholder text if there is no image loaded
+                    placeholderText.style.display = 'block';
+                    placeholderText.textContent = '새로운 캔버스 크기로 설정되었습니다. 이미지를 여기에 드롭하거나 업로드하세요.';
+                    uploadedImage.style.display = 'none';
+                    maskCanvas.style.display = 'none';
+                    guideCanvas.style.display = 'none'; // Hide guideCanvas
+                }
+            }
+
+            // Event listeners for size links
+            sizeLargeLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                setCanvasSize(1000, sizeLargeLink);
+            });
+
+            sizeMediumLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                setCanvasSize(800, sizeMediumLink);
+            });
+
+            sizeSmallLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                setCanvasSize(600, sizeSmallLink);
+            });
+
+            // Initialize the bold state for the default size (e.g., Medium if initial value is 800)
+            if (currentFixedSize === 1000) {
+                sizeLargeLink.style.fontWeight = 'bold';
+            } else if (currentFixedSize === 800) {
+                sizeMediumLink.style.fontWeight = 'bold';
+            } else if (currentFixedSize === 600) {
+                sizeSmallLink.style.fontWeight = 'bold';
+            }
+
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+            let currentTool = 'brush'; // 'brush' or 'eraser' or 'box'
+
+            let startX = 0;
+            let startY = 0;
+            let savedImageData = null;
+
+            let pastedImageContainer = document.getElementById('pastedImageContainer');
+            let pastedImage = document.getElementById('pastedImage');
+            let isResizing = false;
+            let isDragging = false;
+            let initialX, initialY;
+            let initialWidth, initialHeight;
+            let initialLeft, initialTop; // Add these variables
+
+            // Drawing properties
+            ctx.lineWidth = brushThicknessSlider.value; // Initialize with slider value
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = brushColorInput.value; // Default brush color changed to red
+
+            guideCtx.lineWidth = 2; // Initialize guideCtx line width
+            guideCtx.lineCap = 'round';
+            guideCtx.strokeStyle = brushColorInput.value; // Initialize guideCtx stroke color
+            guideCtx.setLineDash([5, 5]); // Set dashed line for guideCtx
+
+            // Function to update cursor based on brush thickness
+            function updateCursor() {
+                const thickness = parseInt(brushThicknessSlider.value); // Ensure thickness is an integer
+                // Cursor size should match thickness, so radius is thickness / 2
+                const radius = thickness / 2;
+                const brushSvg = `<svg xmlns='http://www.w3.org/2000/svg' width='${thickness}' height='${thickness}' viewport='0 0 ${thickness} ${thickness}' version='1.1'><circle cx='${radius}' cy='${radius}' r='${radius - 0.5}' stroke='black' stroke-width='1' fill='white' /></svg>`;
+                const eraserSvg = `<svg xmlns='http://www.w3.org/2000/svg' width='${thickness}' height='${thickness}' viewport='0 0 ${thickness} ${thickness}' version='1.1'><circle cx='${radius}' cy='${radius}' r='${radius - 0.5}' stroke='black' stroke-width='1' fill='none' /></svg>`;
+
+                const brushCursorUrl = `url("data:image/svg+xml;utf8,${encodeURIComponent(brushSvg)}") ${radius} ${radius}, auto`;
+                const eraserCursorUrl = `url("data:image/svg+xml;utf8,${encodeURIComponent(eraserSvg)}") ${radius} ${radius}, auto`;
+                
+                if (currentTool === 'brush') {
+                    maskCanvas.style.cursor = brushCursorUrl;
+                } else if (currentTool === 'eraser') {
+                    maskCanvas.style.cursor = eraserCursorUrl;
+                } else {
+                    maskCanvas.style.cursor = 'crosshair'; // Default for other tools
+                }
+            }
+
+            // Update thickness display
+            currentThicknessSpan.textContent = brushThicknessSlider.value;
+
+            brushThicknessSlider.addEventListener('input', () => {
+                ctx.lineWidth = brushThicknessSlider.value;
+                currentThicknessSpan.textContent = brushThicknessSlider.value;
+                updateCursor(); // Update cursor size when thickness changes
+            });
+
+            brushColorInput.addEventListener('change', () => {
+                ctx.strokeStyle = brushColorInput.value; // Update strokeStyle here
+                ctx.fillStyle = brushColorInput.value; // Also update fillStyle for box tool
+            });
+
+            function updatePrompt() {
+                if (!coworkingCheckbox.checked) {
+                    fixedPromptHeaderInput.value = "Create an image that is,";
+                } else { // Coworking is checked
+                    if (sketchCheckbox.checked) {
+                        fixedPromptHeaderInput.value = "Keep the same minimal line drawing style. That is,";
+                    } else {
+                        fixedPromptHeaderInput.value = "Turn the sketched part of this image into a drawing in a similar style of the picture. That is,";
+                    }
+                }
+            }
+
+            // 캔버스 리사이즈 시 초기화되는 컨텍스트 설정을 복구
+            function resetDrawingContext() {
+                ctx.lineWidth = brushThicknessSlider.value;
+                ctx.lineCap = 'round';
+                if (currentTool === 'brush' || currentTool === 'box') {
+                    ctx.strokeStyle = brushColorInput.value;
+                    ctx.fillStyle = brushColorInput.value;
+                } else {
+                    ctx.strokeStyle = 'rgba(0,0,0,1)';
+                    ctx.fillStyle = 'rgba(0,0,0,0)'; // Ensure fillStyle is transparent for eraser
+                }
+            }
+
+            function updateImageNumbering() {
+                const imagePlaceholders = sidebar.querySelectorAll('.image-placeholder');
+                let checkedImageCount = 0;
+                imagePlaceholders.forEach(imgContainer => {
+                    const checkbox = imgContainer.querySelector('.image-checkbox');
+                    const imageNumberSpan = imgContainer.querySelector('.image-number');
+                    if (checkbox && imageNumberSpan) {
+                        if (checkbox.checked) {
+                            checkedImageCount++;
+                            imageNumberSpan.textContent = checkedImageCount;
+                            imageNumberSpan.style.display = 'block'; // Show the number
+                        } else {
+                            imageNumberSpan.textContent = ''; // Clear the number
+                            imageNumberSpan.style.display = 'none'; // Hide the number
+                        }
+                    }
+                });
+            }
+
+            function resizeCanvasToImage() {
+                if (uploadedImage.style.display !== 'none') {
+                    const tempCanvas = document.createElement('canvas');
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCanvas.width = maskCanvas.width;
+                    tempCanvas.height = maskCanvas.height;
+                    tempCtx.drawImage(maskCanvas, 0, 0);
+
+                    // Calculate the dimensions of the image display area
+                    const displayAreaWidth = imageDisplayArea.offsetWidth;
+                    const displayAreaHeight = imageDisplayArea.offsetHeight;
+
+                    // Get natural dimensions of the uploaded image
+                    const naturalWidth = uploadedImage.naturalWidth;
+                    const naturalHeight = uploadedImage.naturalHeight;
+
+                    // Calculate new image dimensions to fit within the display area, maintaining aspect ratio
+                    let newWidth = naturalWidth;
+                    let newHeight = naturalHeight;
+
+                    if (newWidth > displayAreaWidth || newHeight > displayAreaHeight) {
+                        const aspectRatio = newWidth / newHeight;
+                        if (newWidth / displayAreaWidth > newHeight / displayAreaHeight) {
+                            newWidth = displayAreaWidth;
+                            newHeight = displayAreaWidth / aspectRatio;
+                        } else {
+                            newHeight = displayAreaHeight;
+                            newWidth = displayAreaHeight * aspectRatio;
+                        }
+                    }
+
+                    // Set the displayed image and canvas dimensions
+                    uploadedImage.style.width = newWidth + 'px';
+                    uploadedImage.style.height = newHeight + 'px';
+                    uploadedImage.width = newWidth; // Also update element attributes for consistency
+                    uploadedImage.height = newHeight;
+
+                    maskCanvas.width = newWidth;
+                    maskCanvas.height = newHeight;
+                    maskCanvas.style.width = newWidth + 'px';
+                    maskCanvas.style.height = newHeight + 'px';
+                    
+                    ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                    // Scale the existing drawing to fit the new canvas size
+                    // Ensure tempCanvas drawing is scaled correctly to the new dimensions
+                    if (tempCanvas.width > 0 && tempCanvas.height > 0) {
+                        ctx.drawImage(tempCanvas, 0, 0, newWidth, newHeight);
+                    }
+                    resetDrawingContext();
+                    updateImageSizeInputs(); // Update image size inputs after resizing
+
+                    // Set the scroll position to 0,0 after resizing
+                    imageDisplayArea.scrollLeft = 0;
+                    imageDisplayArea.scrollTop = 0;
+                }
+            }
+            
+            let imageCount = 0; // Track the number of images added
+
+            function handleImageFileAndReturnContainer(file) {
+                return new Promise(resolve => {
+                    if (file) {
+                        // Ensure the file has a proper image MIME type
+                        let processedFile = file;
+                        if (!file.type.startsWith('image/') && file.type !== 'application/octet-stream') {
+                            console.warn(`Unexpected file type: ${file.type}. Attempting to force to image/png.`);
+                            processedFile = new File([file], file.name, { type: 'image/png' });
+                        } else if (file.type === 'application/octet-stream') {
+                             // If it's octet-stream, try to guess or default to image/png
+                            console.warn(`File type is application/octet-stream. Attempting to force to image/png.`);
+                            processedFile = new File([file], file.name, { type: 'image/png' });
+                        }
+
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            uploadedImage.src = e.target.result;
+                            uploadedImage.style.display = 'block';
+                            placeholderText.style.display = 'none';
+                            maskCanvas.style.display = 'block';
+
+                            uploadedImage.onload = () => {
+                                let finalWidth;
+                                let finalHeight;
+
+                                if (currentFixedSize > 0) {
+                                    // If a fixed size is set (e.g., by clicking Large, Medium, Small)
+                                    // Fit the image within the fixed square size while maintaining aspect ratio
+                                    const { width, height } = calculateAspectFitDimensions(uploadedImage.naturalWidth, uploadedImage.naturalHeight, currentFixedSize, currentFixedSize);
+                                    finalWidth = width;
+                                    finalHeight = height;
+                                } else {
+                                    // If no fixed size is set, use the natural dimensions
+                                    finalWidth = uploadedImage.naturalWidth;
+                                    finalHeight = uploadedImage.naturalHeight;
+                                }
+
+                                uploadedImage.width = finalWidth;
+                                uploadedImage.height = finalHeight;
+                                uploadedImage.style.width = finalWidth + 'px';
+                                uploadedImage.style.height = finalHeight + 'px';
+
+                                maskCanvas.width = finalWidth;
+                                maskCanvas.height = finalHeight;
+                                maskCanvas.style.width = finalWidth + 'px';
+                                maskCanvas.style.height = finalHeight + 'px';
+                                
+                                ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                                // Draw the original image onto the canvas, scaled to fit the new canvas size
+                                ctx.drawImage(uploadedImage, 0, 0, finalWidth, finalHeight);
+                                resetDrawingContext();
+                                // updateImageSizeInputs(); // No longer needed as inputs are disabled if fixed size is set
+                                uploadedImage.style.display = 'block'; // Ensure image is visible
+                                maskCanvas.style.display = 'block'; // Ensure canvas is visible
+                                placeholderText.style.display = 'none'; // Hide placeholder
+                            };
+                            
+                            // Add image to sidebar, up to a maximum of 5
+                            if (imageCount < 20) {
+                                const imgContainer = document.createElement('div');
+                                imgContainer.className = 'image-placeholder';
+                                imgContainer.style = "width: 100%; height: 100px; background-color: #ddd; display: flex; align-items: center; justify-content: center; border-radius: 5px; color: #555; overflow: hidden; position: relative;";
+                                const img = document.createElement('img');
+                                img.src = e.target.result;
+                                img.style = "max-width: 100%; max-height: 100%; object-fit: contain;";
+                                imgContainer.appendChild(img);
+
+                                // Add image number
+                                const imageNumberSpan = document.createElement('span');
+                                imageNumberSpan.className = 'image-number';
+                                // imageNumberSpan.textContent = imageCount + 1; // 1-based numbering
+                                imgContainer.appendChild(imageNumberSpan);
+
+                                // Add checkbox
+                                const imageCheckbox = document.createElement('input');
+                                imageCheckbox.type = 'checkbox';
+                                imageCheckbox.className = 'image-checkbox';
+                                imageCheckbox.id = `imageCheckbox_${imageCount + 1}`;
+                                imgContainer.appendChild(imageCheckbox);
+
+                                // Stop event propagation when checkbox is clicked
+                                imageCheckbox.addEventListener('click', function(event) {
+                                    event.stopPropagation();
+                                });
+
+                                // Add change event listener to update numbering
+                                imageCheckbox.addEventListener('change', updateImageNumbering);
+
+                                sidebar.appendChild(imgContainer);
+                                imgContainer.style.display = 'flex'; // Show the image placeholder
+                                imageCount++;
+
+                                // Add click event to sidebar image
+                                imgContainer.addEventListener('click', function() {
+                                    // Remove active class from previous selection
+                                    const currentActive = document.querySelector('.image-placeholder.active');
+                                    if (currentActive) {
+                                        currentActive.classList.remove('active');
+                                    }
+                                    // Add active class to clicked image
+                                    imgContainer.classList.add('active');
+
+                                    uploadedImage.src = img.src;
+                                    uploadedImage.style.display = 'block';
+                                    placeholderText.style.display = 'none';
+                                    maskCanvas.style.display = 'block';
+                                    guideCanvas.style.opacity = '0'; // Hide guideCanvas when an image is selected with opacity
+                                    uploadedImage.onload = function() { // Use function() to access 'this'
+                                        let finalWidth;
+                                        let finalHeight;
+
+                                        if (currentFixedSize > 0) {
+                                            const { width: scaledWidth, height: scaledHeight } = calculateAspectFitDimensions(this.naturalWidth, this.naturalHeight, currentFixedSize, currentFixedSize);
+                                            finalWidth = scaledWidth;
+                                            finalHeight = scaledHeight;
+                                        } else {
+                                            finalWidth = this.naturalWidth;
+                                            finalHeight = this.naturalHeight;
+                                        }
+
+                                        maskCanvas.width = finalWidth;
+                                        maskCanvas.height = finalHeight;
+                                        maskCanvas.style.width = finalWidth + 'px';
+                                        maskCanvas.style.height = finalHeight + 'px';
+
+                                        uploadedImage.style.width = finalWidth + 'px';
+                                        uploadedImage.style.height = finalHeight + 'px';
+                                        uploadedImage.width = finalWidth; // Also update element attributes for consistency
+                                        uploadedImage.height = finalHeight;
+
+                                        ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                                        // Draw the newly loaded image onto the canvas, scaled to fit
+                                        const offsetX = (finalWidth - finalWidth) / 2;
+                                        const offsetY = (finalHeight - finalHeight) / 2;
+                                        ctx.drawImage(uploadedImage, offsetX, offsetY, finalWidth, finalHeight); // Use uploadedImage here
+
+                                        resetDrawingContext();
+                                        // updateImageSizeInputs(); // No longer needed as inputs are disabled if fixed size is set
+                                    };
+                                    updateImageNumbering(); // Add this line to update numbering after image is selected
+                                });
+                                resolve(imgContainer); // Resolve the promise with the imgContainer
+                            } else {
+                                resolve(null); // If imageCount >= 20, resolve with null
+                            }
+                        };
+                        reader.readAsDataURL(processedFile); // Use processedFile here
+                    } else {
+                        resolve(null); // If file is not provided, resolve with null
+                    }
+                });
+            }
+
+            function updateImageSizeInputs() {
+                if (uploadedImage.style.display !== 'none') {
+                    imageWidthInput.value = uploadedImage.naturalWidth;
+                    imageHeightInput.value = uploadedImage.naturalHeight;
+                } else {
+                    imageWidthInput.value = 0;
+                    imageHeightInput.value = 0;
+                }
+            }
+
+            imageUpload.addEventListener('change', function(event) {
+                const files = event.target.files;
+                for (let i = 0; i < files.length; i++) {
+                    handleImageFileAndReturnContainer(files[i]);
+                }
+            });
+            
+            window.addEventListener('resize', () => {
+                // resizeCanvasToImage(); // No longer needed as we set canvas size directly
+            });
+
+            newImageBtn.addEventListener('click', () => {
+                // Create a new black image (e.g., 1024x1024) - adjust to fit imageDisplayArea
+                const displayAreaWidth = imageDisplayArea.offsetWidth;
+                const displayAreaHeight = imageDisplayArea.offsetHeight;
+
+                const width = parseInt(imageWidthInput.value) > 0 ? parseInt(imageWidthInput.value) : 1024;
+                const height = parseInt(imageHeightInput.value) > 0 ? parseInt(imageHeightInput.value) : 1024;
+
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCanvas.width = width;
+                tempCanvas.height = height;
+                tempCtx.fillStyle = 'black'; // Set fill style to black
+                tempCtx.fillRect(0, 0, width, height);
+
+                const imageDataUrl = tempCanvas.toDataURL('image/png');
+
+                // Pass the new image through handleImageFileAndReturnContainer to ensure consistent MIME type handling
+                handleImageFileAndReturnContainer(dataURLtoFile(imageDataUrl, `new_image_${Date.now()}.png`));
+                guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height); // Clear guideCanvas
+                guideCanvas.style.display = 'none'; // Hide guideCanvas
+                guideCanvas.style.opacity = '0'; // Hide guideCanvas
+
+                // The following lines are now handled by handleImageFileAndReturnContainer's internal logic
+                // uploadedImage.src = imageDataUrl;
+                // uploadedImage.style.display = 'block';
+                // placeholderText.style.display = 'none';
+                // maskCanvas.style.display = 'block';
+
+                // uploadedImage.onload = () => {
+                //     uploadedImage.width = width;  
+                //     uploadedImage.height = height;
+                    
+                //     maskCanvas.width = width;
+                //     maskCanvas.height = height;
+                //     maskCanvas.style.width = width + 'px';
+                //     maskCanvas.style.height = height + 'px';
+
+                //     uploadedImage.style.width = width + 'px';
+                //     uploadedImage.style.height = height + 'px';
+
+                //     ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                //     resetDrawingContext();
+                // };
+            });
+
+            coworkingCheckbox.addEventListener('change', () => {
+                updatePrompt(); // Update prompt when Coworking checkbox changes
+                if (coworkingCheckbox.checked) {
+                    // resizeCanvasToImage(); // No longer needed here
+                    // sketchCheckbox.checked = true; // Make Sketch also checked when Coworking is checked
+                } else {
+                    // sketchCheckbox.checked = false; // Uncheck Sketch when Coworking is unchecked
+                }
+            });
+
+            sketchCheckbox.addEventListener('change', () => {
+                updatePrompt(); // Update prompt when Sketch checkbox changes
+                // if (coworkingCheckbox.checked) { // Only change if Coworking is checked
+                //     if (sketchCheckbox.checked) {
+                //         fixedPromptHeaderInput.value = "Keep the same minimal line drawing style. That is,";
+                //     } else {
+                //         fixedPromptHeaderInput.value = "Transform this sketch into a photorealistic drawing. Add realistic lighting, shadows, and textures. That is,";
+                //     }
+                // }
+            });
+
+            function draw(e) {
+                if (!isDrawing) return;
+
+                // const targetCanvas = e.target; // Rolled back - No longer needed as events are only on maskCanvas
+                let currentDrawingCtx = ctx; // Rolled back - Always draw on maskCanvas ctx for brush/eraser
+                // if (targetCanvas === maskCanvas) {
+                //     currentDrawingCtx = ctx;
+                // } else if (targetCanvas === guideCanvas) {
+                //     currentDrawingCtx = guideCtx;
+                // } else {
+                //     return; // If event not on a relevant canvas, do nothing
+                // }
+
+                // Check if the event is a pointer event (pen or mouse)
+                if (e.pointerType === 'pen' || e.pointerType === 'mouse') {
+                    // Update brush thickness based on pressure for pen, or use default for mouse
+                    let currentThickness = parseInt(brushThicknessSlider.value);
+                    if (e.pointerType === 'pen' && e.pressure > 0) {
+                        currentDrawingCtx.lineWidth = currentThickness * e.pressure * 2; // Scale thickness with pressure, adjust multiplier as needed
+                    } else {
+                        currentDrawingCtx.lineWidth = currentThickness; // Use default thickness for mouse or no pressure
+                    }
+                }
+
+                if (currentTool === 'brush' || currentTool === 'eraser') {
+                    currentDrawingCtx.globalCompositeOperation = (currentTool === 'brush') ? 'source-over' : 'destination-out';
+                    currentDrawingCtx.strokeStyle = (currentTool === 'brush') ? brushColorInput.value : 'rgba(0,0,0,1)';
+
+                    currentDrawingCtx.beginPath();
+                    currentDrawingCtx.moveTo(lastX, lastY);
+                    const { x: currentX, y: currentY } = getCanvasMouseCoords(e);
+                    currentDrawingCtx.lineTo(currentX, currentY);
+                    currentDrawingCtx.stroke();
+                    [lastX, lastY] = [currentX, currentY];
+                } else if (currentTool === 'box') {
+                    // alert('box');
+                    // if (targetCanvas === guideCanvas) { // Rolled back - No longer needed
+                        guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height); // Clear previous guideline
+
+                        // *** 테스트용 파란색 사각형 코드는 제거 ***
+                        // guideCtx.strokeStyle = 'blue'; // 테스트용 파란색
+                        // guideCtx.lineWidth = 5;       // 테스트용 두꺼운 선
+                        // guideCtx.strokeRect(0, 0, 100, 100); // 고정된 위치에 사각형 그리기
+                        // *** 테스트용 파란색 사각형 코드 끝 ***
+
+                        const { x: currentX, y: currentY } = getCanvasMouseCoords(e); // 현재 마우스 좌표
+                        const width = currentX - startX;
+                        const height = currentY - startY;
+
+                        // *** 디버깅용 console.log 제거 ***
+                        // console.log(`[Box Draw] startX: ${startX}, startY: ${startY}, currentX: ${currentX}, currentY: ${currentY}, width: ${width}, height: ${height}`);
+                        // *** 디버깅용 console.log 끝 ***
+
+                        guideCtx.strokeStyle = brushColorInput.value; // Use brush color (white/black as requested)
+                        guideCtx.lineWidth = 2; // Fixed guideline thickness
+                        guideCtx.beginPath();
+                        guideCtx.setLineDash([5, 5]);
+                        guideCtx.strokeRect(startX, startY, width, height);
+                        guideCtx.closePath();
+                        [lastX, lastY] = [currentX, currentY]; // Update for next move
+                    // } // Rolled back - No longer needed
+                } else if (currentTool === 'text') {
+                    // Logic for text tool will go here
+                }
+            }
+
+            function getCanvasMouseCoords(e) {
+                const rect = maskCanvas.getBoundingClientRect();
+                const scaleX = maskCanvas.width / rect.width;
+                const scaleY = maskCanvas.height / rect.height;
+                
+                const mouseX = (e.clientX - rect.left) * scaleX + imageDisplayArea.scrollLeft;
+                const mouseY = (e.clientY - rect.top) * scaleY + imageDisplayArea.scrollTop;
+                return { x: mouseX, y: mouseY };
+            }
+
+            maskCanvas.addEventListener('pointerdown', (e) => {
+                console.log('pointerdown'); // Add this alert
+                isDrawing = true;
+                const { x: mouseX, y: mouseY } = getCanvasMouseCoords(e);
+                [lastX, lastY] = [mouseX, mouseY];
+                if (currentTool === 'box') {
+                    [startX, startY] = [mouseX, mouseY];
+                    guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height); // Clear guideCanvas at start of drag
+                    guideCanvas.style.display = 'block'; // Show guideCanvas for box tool
+                    guideCanvas.style.opacity = '1'; // Show guideCanvas with opacity for box tool
+                } else {
+                    // For brush/eraser, ensure guideCanvas is hidden
+                    guideCanvas.style.display = 'none';
+                    guideCanvas.style.opacity = '0';
+                }
+                // Prevent scrolling when drawing on touch devices
+                e.preventDefault();
+            });
+
+            maskCanvas.addEventListener('pointermove', draw);
+            
+            maskCanvas.addEventListener('pointerup', (e) => {
+                if (!isDrawing) return;
+                
+                if (currentTool === 'box') {
+                    if (savedImageData) {
+                        ctx.putImageData(savedImageData, 0, 0);
+                    }
+                    const { x: currentX, y: currentY } = getCanvasMouseCoords(e);
+                    const width = currentX - startX;
+                    const height = currentY - startY;
+                    ctx.globalCompositeOperation = 'source-over';
+                    
+                    if (e.shiftKey) { // Draw filled box if Shift is pressed
+                        ctx.fillStyle = brushColorInput.value;
+                        ctx.fillRect(startX, startY, width, height);
+                    } else { // Draw empty rectangle with brush thickness
+                        ctx.strokeStyle = brushColorInput.value;
+                        ctx.lineWidth = brushThicknessSlider.value; // Use brush thickness
+                        ctx.beginPath(); // Start a new path for the rectangle
+                        ctx.rect(startX, startY, width, height); // Define the rectangle path
+                        ctx.stroke(); // Draw the stroke
+                        ctx.closePath(); // Close the path
+                    }
+                    
+                    savedImageData = null;
+                    ctx.setLineDash([]); // Reset line dash
+                    ctx.lineWidth = brushThicknessSlider.value; // Reset line width
+                    guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height); // Clear guideCanvas after drawing box
+                    guideCanvas.style.display = 'none'; // Hide guideCanvas for box tool
+                    guideCanvas.style.opacity = '0'; // Hide guideCanvas with opacity for box tool
+                }
+                
+                isDrawing = false;
+                // ctx.lineWidth = brushThicknessSlider.value; // No need to reset here
+            });
+
+            maskCanvas.addEventListener('pointerleave', () => {
+                isDrawing = false;
+                if (currentTool === 'box') { // Add this condition
+                    guideCanvas.style.display = 'none';
+                    guideCanvas.style.opacity = '0';
+                }
+            });
+
+            brushBtn.addEventListener('click', () => {
+                currentTool = 'brush';
+                ctx.strokeStyle = brushColorInput.value; // Set stroke style to current brush color
+                ctx.globalCompositeOperation = 'source-over';
+                maskCanvas.classList.remove('eraser-cursor', 'crosshair-cursor');
+                maskCanvas.classList.add('brush-cursor');
+                updateCursor(); // Update cursor when brush tool is selected
+            });
+
+            eraserBtn.addEventListener('click', () => {
+                currentTool = 'eraser';
+                ctx.strokeStyle = 'rgba(0,0,0,1)';
+                ctx.globalCompositeOperation = 'destination-out';
+                maskCanvas.classList.remove('brush-cursor', 'crosshair-cursor');
+                maskCanvas.classList.add('eraser-cursor');
+                updateCursor(); // Update cursor when eraser tool is selected
+                guideCanvas.style.display = 'none'; // Hide guideCanvas for other tools
+                guideCanvas.style.opacity = '0'; // Reset opacity for guideCanvas
+            });
+
+            boxBtn.addEventListener('click', () => {
+                currentTool = 'box';
+                ctx.globalCompositeOperation = 'source-over';
+                maskCanvas.classList.remove('brush-cursor', 'eraser-cursor');
+                maskCanvas.classList.add('crosshair-cursor');
+                updateCursor(); // Update cursor for box tool
+                // No need to set guideCanvas display here, it will be handled in pointerdown
+            });
+
+            clearCanvasBtn.addEventListener('click', () => {
+                ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                resetDrawingContext();
+                maskCanvas.classList.remove('brush-cursor', 'eraser-cursor');
+                maskCanvas.classList.add('crosshair-cursor');
+                updateCursor(); // Update cursor after clearing canvas
+                guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+                guideCanvas.style.display = 'none'; // Hide guideCanvas
+                guideCanvas.style.opacity = '0'; // Hide guideCanvas
+            });
+
+            // Initial cursor update
+            updateCursor();
+
+            deleteImagesBtn.addEventListener('click', () => {
+                const imagePlaceholders = sidebar.querySelectorAll('.image-placeholder');
+                let deletedCount = 0;
+                imagePlaceholders.forEach(imgContainer => {
+                    const checkbox = imgContainer.querySelector('.image-checkbox');
+                    if (checkbox && checkbox.checked) {
+                        imgContainer.remove();
+                        deletedCount++;
+                    }
+                });
+                imageCount -= deletedCount; // Decrement imageCount by the number of deleted images
+                // Optionally, re-number the remaining images if desired
+                const remainingImagePlaceholders = sidebar.querySelectorAll('.image-placeholder');
+                remainingImagePlaceholders.forEach((imgContainer, index) => {
+                    const imageNumberSpan = imgContainer.querySelector('.image-number');
+                    if (imageNumberSpan) {
+                        imageNumberSpan.textContent = index + 1; // Re-number from 1
+                        const checkbox = imgContainer.querySelector('.image-checkbox');
+                        if (checkbox) {
+                            checkbox.id = `imageCheckbox_${index + 1}`;
+                        }
+                    }
+                });
+                updateImageNumbering(); // Add this line to update numbering after deletion
+
+                // You might also want to clear the main display if the active image was deleted
+                const currentActive = document.querySelector('.image-placeholder.active');
+                if (currentActive && !document.body.contains(currentActive)) { // If active image was deleted
+                    uploadedImage.style.display = 'none';
+                    maskCanvas.style.display = 'none';
+                    guideCanvas.style.display = 'none'; // Hide guideCanvas
+                    guideCanvas.style.opacity = '0'; // Hide guideCanvas
+                    placeholderText.style.display = 'block';
+                    placeholderText.textContent = '이미지를 여기에 드롭하거나 업로드하세요';
+                }
+            });
+
+            checkAllBtn.addEventListener('click', () => {
+                const imageCheckboxes = sidebar.querySelectorAll('.image-checkbox');
+                imageCheckboxes.forEach(checkbox => {
+                    checkbox.checked = true;
+                });
+                updateImageNumbering();
+            });
+
+            uncheckAllBtn.addEventListener('click', () => {
+                const imageCheckboxes = sidebar.querySelectorAll('.image-checkbox');
+                imageCheckboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                updateImageNumbering();
+            });
+
+            saveBtn.addEventListener('click', async () => {
+                if (uploadedImage.style.display === 'none' || !uploadedImage.src) {
+                    alert('저장할 이미지가 없습니다. 먼저 이미지를 업로드하세요.');
+                    return;
+                }
+
+                if (imageCount >= 20) {
+                    alert('이미지는 최대 20개까지 저장할 수 있습니다. 기존 이미지를 삭제해주세요.');
+                    return;
+                }
+
+                console.log("--- Save Button Clicked ---");
+                console.log("Mask Canvas Data URL:", maskCanvas.toDataURL());
+                console.log("Uploaded Image Data URL:", uploadedImage.src.substring(0, 100) + "..."); // Truncate for console output
+
+                const mergedCanvas = document.createElement('canvas');
+                const mergedCtx = mergedCanvas.getContext('2d');
+
+                mergedCanvas.width = uploadedImage.naturalWidth; // Use naturalWidth/Height for original size
+                mergedCanvas.height = uploadedImage.naturalHeight;
+
+                // Draw the original image
+                mergedCtx.drawImage(uploadedImage, 0, 0, mergedCanvas.width, mergedCanvas.height);
+
+                // Draw the mask canvas on top, ensuring it's scaled correctly
+                // Calculate scaling factors to match maskCanvas to the original image dimensions
+                const scaleX = uploadedImage.naturalWidth / maskCanvas.width;
+                const scaleY = uploadedImage.naturalHeight / maskCanvas.height;
+
+                // Adjust the drawing position of maskCanvas based on imageDisplayArea's scroll offset
+                const drawX = -imageDisplayArea.scrollLeft * scaleX;
+                const drawY = -imageDisplayArea.scrollTop * scaleY;
+
+                mergedCtx.drawImage(maskCanvas, drawX, drawY, maskCanvas.width * scaleX, maskCanvas.height * scaleY);
+
+                const mergedImageDataUrl = mergedCanvas.toDataURL('image/png');
+                console.log("Merged Image Data URL (snippet):", mergedImageDataUrl.substring(0, 100) + "...");
+
+                // Add the merged image to the sidebar
+                handleImageFileAndReturnContainer(dataURLtoFile(mergedImageDataUrl, `merged_image_${imageCount + 1}.png`));
+                updateImageNumbering(); // Add this line to update numbering after saving
+                console.log("--- Save Process Finished ---");
+            });
+
+            downloadBtn.addEventListener('click', async () => {
+                const imagePlaceholders = sidebar.querySelectorAll('.image-placeholder');
+                let checkedImages = 0;
+                for (const imgContainer of imagePlaceholders) {
+                    const checkbox = imgContainer.querySelector('.image-checkbox');
+                    if (checkbox && checkbox.checked) {
+                        checkedImages++;
+                        const img = imgContainer.querySelector('img');
+                        if (img) {
+                            const imageUrl = img.src;
+                            const a = document.createElement('a');
+                            a.href = imageUrl;
+                            a.download = `downloaded_image_${Date.now()}.png`; // Unique filename
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }
+                    }
+                }
+                if (checkedImages === 0) {
+                    alert('다운로드할 이미지를 선택해주세요.');
+                }
+            });
+
+            saveDemoBtn.addEventListener('click', async () => {
+                const demoTitle = prompt("저장할 데모의 제목을 입력하세요:");
+                if (!demoTitle) {
+                    alert("데모 제목이 필요합니다.");
+                    return;
+                }
+
+                const promptText = document.getElementById('fixedPromptHeader').value + document.getElementById('promptTextarea').value;
+                const imagePlaceholders = sidebar.querySelectorAll('.image-placeholder');
+                const selectedImagesData = [];
+
+                for (const imgContainer of imagePlaceholders) {
+                    const checkbox = imgContainer.querySelector('.image-checkbox');
+                    if (checkbox && checkbox.checked) {
+                        const img = imgContainer.querySelector('img');
+                        if (img) {
+                            const base64Image = await getImageBase64(img);
+                            selectedImagesData.push(base64Image);
+                        }
+                    }
+                }
+
+                if (selectedImagesData.length === 0) {
+                    alert("데모에 저장할 이미지를 하나 이상 선택해주세요.");
+                    return;
+                }
+
+                textResponseArea.textContent = 'Saving demo...';
+
+                try {
+                    const response = await fetch('/save_nano_banana_demo', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            title: demoTitle,
+                            fixed_prompt_header: document.getElementById('fixedPromptHeader').value, // Send separately
+                            main_prompt: document.getElementById('promptTextarea').value, // Send separately
+                            images: selectedImagesData
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                    }
+
+                    const result = await response.json();
+                    textResponseArea.textContent = `Demo saved successfully: ${result.message}`;
+                    alert('데모가 성공적으로 저장되었습니다!');
+
+                } catch (error) {
+                    console.error('Save Demo API failed:', error);
+                    textResponseArea.textContent = `Error saving demo: ${error.message}`;
+                    alert(`데모 저장 중 오류 발생: ${error.message}`);
+                }
+            });
+
+            function dataURLtoFile(dataurl, filename) {
+                const arr = dataurl.split(',');
+                const mime = arr[0].match(/:(.*?);/)[1];
+                const bstr = atob(arr[1]);
+                let n = bstr.length;
+                const u8arr = new Uint8Array(n);
+                while(n--){
+                    u8arr[n] = bstr.charCodeAt(n);
+                }
+                return new File([u8arr], filename, {type:mime});
+            }
+
+            // Function to load a demo
+            async function loadDemo(demo) {
+                // Clear existing images in the sidebar
+                sidebar.querySelectorAll('.image-placeholder').forEach(img => img.remove());
+                imageCount = 0; // Reset image count
+                
+                // Set the prompt
+                const fixedPromptHeaderInput = document.getElementById('fixedPromptHeader');
+                const promptTextarea = document.getElementById('promptTextarea');
+
+                if (demo.fixed_prompt_header !== undefined && demo.main_prompt !== undefined) {
+                    fixedPromptHeaderInput.value = demo.fixed_prompt_header;
+                    promptTextarea.value = demo.main_prompt;
+                } else if (demo.prompt !== undefined) {
+                    // Fallback for old demo format where prompt was combined
+                    fixedPromptHeaderInput.value = ""; // Clear header for old format
+                    promptTextarea.value = demo.prompt; // Put entire prompt into main textarea
+                } else {
+                    fixedPromptHeaderInput.value = "Create an image that is, "; // Default if no prompt data
+                    promptTextarea.value = "";
+                }
+
+                // Load images into the image panel and check them
+                for (const imageUrl of demo.images) {
+                    try {
+                        // Assuming imageUrl is a GCS path like gs://bucket-name/folder/image.png
+                        // We need a backend endpoint to serve this image.
+                        // For now, let's assume the backend provides a direct URL or converts it.
+                        const response = await fetch(`/get_gcs_image?gcs_path=${encodeURIComponent(imageUrl)}`);
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch image: ${response.statusText}`);
+                        }
+                        const imageBlob = await response.blob();
+                        const file = new File([imageBlob], 'demo_image.png', { type: imageBlob.type });
+                        const imgContainer = await handleImageFileAndReturnContainer(file);
+                        if (imgContainer) {
+                            const checkbox = imgContainer.querySelector('.image-checkbox');
+                            if (checkbox) {
+                                checkbox.checked = true;
+                            }
+                            imgContainer.classList.add('active'); // Set the loaded image as active
+                        }
+                    } catch (error) {
+                        console.error(`Error loading image ${imageUrl}:`, error);
+                    }
+                }
+                updateImageNumbering();
+            }
+
+            // Helper function to calculate dimensions to fit within a max size while maintaining aspect ratio
+            function calculateAspectFitDimensions(naturalWidth, naturalHeight, maxWidth, maxHeight) {
+                let newWidth = naturalWidth;
+                let newHeight = naturalHeight;
+
+                if (naturalWidth > maxWidth) {
+                    newHeight = (maxWidth / naturalWidth) * naturalHeight;
+                    newWidth = maxWidth;
+                }
+
+                if (newHeight > maxHeight) {
+                    newWidth = (maxHeight / newHeight) * newWidth;
+                    newHeight = maxHeight;
+                }
+                return { width: newWidth, height: newHeight };
+            }
+
+            // Function to convert image src to Base64
+            async function getImageBase64(imgElement) {
+                if (!imgElement.src || imgElement.src.startsWith('data:')) {
+                    // If already a data URL, return it directly.
+                    // Ensure it has a proper image MIME type. If not, don't force to PNG, just return as is.
+                    return imgElement.src ? imgElement.src : '';
+                }
+                const response = await fetch(imgElement.src);
+                const blob = await response.blob();
+                return new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const dataUrl = reader.result;
+                        // Use the actual blob.type when creating the data URL
+                        resolve(`data:${blob.type};base64,${dataUrl.split(',' )[1]}`);
+                    };
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            imageDisplayArea.addEventListener('dragover', function(event) {
+                event.preventDefault();
+                imageDisplayArea.style.borderColor = '#007bff';
+            });
+
+            imageDisplayArea.addEventListener('dragleave', function(event) {
+                event.preventDefault();
+                imageDisplayArea.style.borderColor = '#ccc';
+            });
+
+            imageDisplayArea.addEventListener('drop', function(event) {
+                event.preventDefault();
+                imageDisplayArea.style.borderColor = '#ccc';
+                const files = event.dataTransfer.files;
+                for (let i = 0; i < files.length; i++) {
+                    handleImageFileAndReturnContainer(files[i]);
+                }
+            });
+
+            placeholderText.addEventListener('click', function() {
+                imageUpload.click();
+            });
+
+            generateBtn.addEventListener('click', async () => {
+                const fixedPromptHeader = document.getElementById('fixedPromptHeader').value;
+                const userPromptText = document.getElementById('promptTextarea').value;
+                const promptText = fixedPromptHeader + userPromptText; // Combine fixed header with user input
+
+                // Save prompt to local storage
+                if (promptText.trim()) {
+                    const MAX_PROMPT_HISTORY = 20;
+                    let promptHistory = JSON.parse(localStorage.getItem('promptHistory') || '[]');
+                    promptHistory.push({ timestamp: new Date().toISOString(), header: fixedPromptHeader, prompt: userPromptText });
+                    if (promptHistory.length > MAX_PROMPT_HISTORY) {
+                        promptHistory = promptHistory.slice(promptHistory.length - MAX_PROMPT_HISTORY);
+                    }
+                    localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
+                }
+
+                const imagePlaceholders = sidebar.querySelectorAll('.image-placeholder');
+                
+                updateImageNumbering(); // Ensure numbering is updated before collecting images
+
+                const selectedImagesData = [];
+
+                // Add this new condition for non-coworking mode without selected images
+                if (!coworkingCheckbox.checked) {
+                    const anyImageSelected = sidebar.querySelectorAll('.image-placeholder .image-checkbox:checked').length > 0;
+                    if (!anyImageSelected) {
+                        const confirmGenerate = confirm('선택된 이미지가 없습니다. 이미지를 선택하지 않고 생성을 계속하시겠습니까?');
+                        if (!confirmGenerate) {
+                            textResponseArea.textContent = '이미지 생성이 취소되었습니다.';
+                            return; // Stop generation if user cancels
+                        }
+                    }
+                }
+
+                if (coworkingCheckbox.checked) {
+                    if (imageCount >= 20) { // Check image limit before generating a new image
+                        alert('이미지는 최대 20개까지 저장할 수 있습니다. 기존 이미지를 삭제해주세요.');
+                        placeholderText.style.display = 'block';
+                        placeholderText.textContent = '이미지를 여기에 드롭하거나 업로드하세요';
+                        uploadedImage.style.display = 'none';
+                        maskCanvas.style.display = 'none';
+                        guideCanvas.style.opacity = '0'; // Hide guideCanvas with opacity
+                        return; // Stop generation
+                    }
+                    if (uploadedImage.style.display !== 'none' && uploadedImage.src) {
+                        const mergedCanvas = document.createElement('canvas');
+                        const mergedCtx = mergedCanvas.getContext('2d');
+
+                        mergedCanvas.width = uploadedImage.naturalWidth;
+                        mergedCanvas.height = uploadedImage.naturalHeight;
+
+                        mergedCtx.drawImage(uploadedImage, 0, 0, mergedCanvas.width, mergedCanvas.height);
+
+                        // Draw the mask canvas on top, ensuring it's scaled correctly
+                        // Calculate scaling factors to match maskCanvas to the original image dimensions
+                        const scaleX = mergedCanvas.width / maskCanvas.width;
+                        const scaleY = mergedCanvas.height / maskCanvas.height;
+
+                        // Adjust the drawing position of maskCanvas based on imageDisplayArea's scroll offset
+                        const drawX = -imageDisplayArea.scrollLeft * scaleX;
+                        const drawY = -imageDisplayArea.scrollTop * scaleY;
+
+                        mergedCtx.drawImage(maskCanvas, drawX, drawY, maskCanvas.width * scaleX, maskCanvas.height * scaleY);
+
+                        const mergedImageDataUrl = mergedCanvas.toDataURL('image/png');
+
+                        // Add the merged image to the sidebar and get the new image container
+                        const newImgContainer = await handleImageFileAndReturnContainer(dataURLtoFile(mergedImageDataUrl, `coworking_image_${imageCount + 1}.png`));
+                        
+                        if (newImgContainer) { // Check if newImgContainer is not null
+                            // Uncheck all other images and check only the newly added one
+                            const allCheckboxes = sidebar.querySelectorAll('.image-checkbox');
+                            allCheckboxes.forEach(cb => {
+                                if (cb !== newImgContainer.querySelector('.image-checkbox')) {
+                                    cb.checked = false;
+                                }
+                            });
+                            newImgContainer.querySelector('.image-checkbox').checked = true;
+                            updateImageNumbering(); // Update numbering after changing checkboxes
+
+                            // Use the newly added image as the only selected image for generation
+                            selectedImagesData.push(mergedImageDataUrl);
+                        } else {
+                            alert('이미지는 최대 20개까지 저장할 수 있습니다. 기존 이미지를 삭제해주세요.');
+                            placeholderText.style.display = 'block';
+                            placeholderText.textContent = '이미지를 여기에 드롭하거나 업로드하세요';
+                            uploadedImage.style.display = 'none';
+                            maskCanvas.style.display = 'none';
+                            guideCanvas.style.opacity = '0'; // Hide guideCanvas with opacity
+                            return; // Stop generation if image cannot be saved
+                        }
+                    }
+                } else {
+                    for (const imgContainer of imagePlaceholders) {
+                        const checkbox = imgContainer.querySelector('.image-checkbox');
+                        if (checkbox && checkbox.checked) {
+                            const img = imgContainer.querySelector('img');
+                            if (img) {
+                                const base64Image = await getImageBase64(img);
+                                selectedImagesData.push(base64Image);
+                            }
+                        }
+                    }
+                }
+                
+                if (!promptText.trim()) {
+                    alert('프롬프트를 입력해주세요.');
+                    textResponseArea.textContent = '프롬프트가 비어있습니다.';
+                    return; // Stop generation if prompt is empty
+                }
+
+                console.log("Selected images data sent to server:", selectedImagesData.length, "images");
+                if (selectedImagesData.length > 0) {
+                    console.log("First image data (snippet):", selectedImagesData[0].substring(0, 100));
+                }
+
+                textResponseArea.textContent = 'Generating...'; // Show generating message in text response area
+
+                try {
+                    const response = await fetch('/generate_nano_banana', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            prompt: promptText,
+                            images: selectedImagesData
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let result = '';
+                    let firstChunk = true;
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        const chunk = decoder.decode(value, { stream: true });
+                        result += chunk;
+
+                        // SSE 형식 데이터 파싱 및 처리
+                        const lines = result.split('\n\n');
+                        result = lines.pop(); // 마지막 불완전한 라인은 다음 청크를 위해 남겨둡니다.
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const jsonStr = line.substring(6);
+                                try {
+                                    const data = JSON.parse(jsonStr);
+                                    if (firstChunk) {
+                                        placeholderText.style.display = 'none';
+                                        firstChunk = false;
+                                    }
+
+                                    if (data.type === 'image_url') {
+                                        // Directly add the generated image to the sidebar
+                                        if (imageCount < 20) { // Check image limit before adding
+                                            fetch(data.url)
+                                                .then(res => res.blob())
+                                                .then(blob => {
+                                                    const file = new File([blob], `generated_image_${imageCount + 1}.png`, { type: 'image/png' });
+                                                    // Use await here as well, if the handleImageFileAndReturnContainer returns a Promise
+                                                    handleImageFileAndReturnContainer(file);
+                                                })
+                                                .catch(error => console.error('Error fetching generated image:', error));
+                                        } else { // Added else block for image limit check
+                                            alert('이미지는 최대 20개까지 저장할 수 있습니다. 기존 이미지를 삭제해주세요.');
+                                        }
+                                        // Clear the main display after generating and adding to sidebar
+                                        // uploadedImage.style.display = 'none';
+                                        // maskCanvas.style.display = 'none';
+                                        // placeholderText.style.display = 'block';
+                                        // placeholderText.textContent = '이미지를 여기에 드롭하거나 업로드하세요';
+                                        guideCanvas.style.opacity = '0'; // Hide guideCanvas after image generation with opacity
+                                    } else if (data.type === 'text') {
+                                        console.log("Generated Text: ", data.data);
+                                        textResponseArea.textContent += data.data; // Add this line
+                                    } else if (data.type === 'error') {
+                                        // placeholderText.style.display = 'block';
+                                        // placeholderText.textContent = `Error: ${data.data}`;
+                                        // uploadedImage.style.display = 'none';
+                                        // maskCanvas.style.display = 'none';
+                                        textResponseArea.textContent = `Error: ${data.data}`;
+                                        reader.cancel();
+                                        return;
+                                    } else if (data.type === 'stream_end') {
+                                        console.log("Stream End Message: ", data.data);
+                                        textResponseArea.textContent += `\n${data.data}`; // Add stream end message
+                                        console.log("Stream end message displayed."); // Add this line
+                                    }
+                                } catch (parseError) {
+                                    console.error('JSON 파싱 오류:', parseError, '데이터:', jsonStr);
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Fetch API failed:', error);
+                    // placeholderText.style.display = 'block';
+                    // placeholderText.textContent = `An error occurred: ${error.message}`;
+                    // uploadedImage.style.display = 'none';
+                    // maskCanvas.style.display = 'none';
+                    textResponseArea.textContent = `An error occurred: ${error.message}`;
+                } finally {
+                    // 최종 처리 (필요한 경우)
+                }
+            });
+
+            pastedImageContainer.addEventListener('mousedown', (e) => {
+                if (!e.target.classList.contains('resizer')) { // Only drag if not clicking on a resizer
+                    isDragging = true;
+                    initialX = e.clientX;
+                    initialY = e.clientY;
+                    initialLeft = pastedImageContainer.offsetLeft;
+                    initialTop = pastedImageContainer.offsetTop;
+                    pastedImageContainer.style.cursor = 'grabbing';
+                }
+            });
+
+            // Resizing logic
+            let activeResizer = null;
+
+            pastedImageContainer.querySelectorAll('.resizer').forEach(resizer => {
+                resizer.addEventListener('mousedown', (e) => {
+                    activeResizer = e.target;
+                    isResizing = true;
+                    initialX = e.clientX;
+                    initialY = e.clientY;
+                    initialWidth = pastedImageContainer.offsetWidth;
+                    initialHeight = pastedImageContainer.offsetHeight;
+                    initialLeft = pastedImageContainer.offsetLeft; // Store initial left
+                    initialTop = pastedImageContainer.offsetTop; // Store initial top
+                    e.stopPropagation(); // Prevent dragging from starting
+                });
+            });
+
+            imageDisplayArea.addEventListener('mousemove', (e) => {
+                if (isResizing && activeResizer) {
+                    const dx = e.clientX - initialX;
+                    const dy = e.clientY - initialY;
+
+                    let newWidth = initialWidth;
+                    let newHeight = initialHeight;
+                    let newLeft = initialLeft;
+                    let newTop = initialTop;
+
+                    if (activeResizer.classList.contains('bottom-right')) {
+                        newWidth = initialWidth + dx;
+                        newHeight = initialHeight + dy;
+                    } else if (activeResizer.classList.contains('bottom-left')) {
+                        newWidth = initialWidth - dx;
+                        newLeft = initialLeft + dx;
+                        newHeight = initialHeight + dy;
+                    } else if (activeResizer.classList.contains('top-right')) {
+                        newWidth = initialWidth + dx;
+                        newHeight = initialHeight - dy;
+                        newTop = initialTop + dy;
+                    } else if (activeResizer.classList.contains('top-left')) {
+                        newWidth = initialWidth - dx;
+                        newLeft = initialLeft + dx;
+                        newHeight = initialHeight - dy;
+                        newTop = initialTop + dy;
+                    }
+
+                    // Apply new dimensions and position
+                    pastedImageContainer.style.width = newWidth + 'px';
+                    pastedImageContainer.style.height = newHeight + 'px';
+                    pastedImageContainer.style.left = newLeft + 'px';
+                    pastedImageContainer.style.top = newTop + 'px';
+                }
+                // Existing dragging logic
+                if (isDragging) {
+                    e.preventDefault();
+                    pastedImageContainer.style.left = (initialLeft + (e.clientX - initialX)) + 'px';
+                    pastedImageContainer.style.top = (initialTop + (e.clientY - initialY)) + 'px';
+                }
+            });
+
+            imageDisplayArea.addEventListener('mouseup', () => {
+                isResizing = false;
+                activeResizer = null;
+                isDragging = false;
+                pastedImageContainer.style.cursor = 'grab';
+            });
+
+            pastedImageContainer.addEventListener('dblclick', () => {
+                if (uploadedImage.style.display === 'none' || !uploadedImage.src) {
+                    alert('마스크 캔버스에 붙여넣기 전에 이미지를 업로드하거나 새로 만드세요.');
+                    return;
+                }
+
+                if (pastedImageContainer.style.display === 'block' && pastedImage.src) {
+                    const img = new Image();
+                    img.onload = () => {
+                        const containerRect = pastedImageContainer.getBoundingClientRect();
+                        const displayAreaRect = imageDisplayArea.getBoundingClientRect();
+
+                        const x = containerRect.left - displayAreaRect.left;
+                        const y = containerRect.top - displayAreaRect.top;
+                        const width = containerRect.width;
+                        const height = containerRect.height;
+
+                        ctx.globalCompositeOperation = 'source-over';
+                        ctx.drawImage(img, x, y, width, height);
+                        pastedImageContainer.style.display = 'none'; // Hide pasted image after drawing
+                        pastedImage.src = '#'; // Clear pasted image source
+                    };
+                    img.src = pastedImage.src;
+                }
+            });
+
+            imageDisplayArea.addEventListener('paste', async (event) => {
+                const items = event.clipboardData.items;
+                for (const item of items) {
+                    if (item.type.indexOf('image') !== -1) {
+                        const blob = item.getAsFile();
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            pastedImage.src = e.target.result;
+                            pastedImage.onload = () => {
+                                pastedImageContainer.style.display = 'block';
+                                pastedImageContainer.style.left = '0px';
+                                pastedImageContainer.style.top = '0px';
+                                // Set initial width/height, capping at imageDisplayArea's size if necessary
+                                const maxWidth = imageDisplayArea.offsetWidth; // Use display area's current width
+                                const maxHeight = imageDisplayArea.offsetHeight; // Use display area's current height
+
+                                let newWidth = pastedImage.naturalWidth;
+                                let newHeight = pastedImage.naturalHeight;
+
+                                if (newWidth > maxWidth) {
+                                    newHeight = (maxWidth / newWidth) * newHeight;
+                                    newWidth = maxWidth;
+                                }
+                                if (newHeight > maxHeight) {
+                                    newWidth = (maxHeight / newHeight) * newWidth;
+                                    newHeight = maxHeight;
+                                }
+                                
+                                pastedImageContainer.style.width = newWidth + 'px';
+                                pastedImageContainer.style.height = newHeight + 'px';
+                            };
+                        };
+                        reader.readAsDataURL(blob);
+                        event.preventDefault(); // Prevent default paste behavior
+                        break;
+                    }
+                }
+            });
+
+            loadDemoBtn.addEventListener('click', async () => {
+                loadDemoModal.style.display = 'flex'; // Show the modal
+                demoList.innerHTML = 'Loading demos...';
+
+                try {
+                    const response = await fetch('/list_nano_banana_demos');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const demos = await response.json();
+
+                    demoList.innerHTML = ''; // Clear loading message
+                    if (demos.length === 0) {
+                        demoList.innerHTML = '<p>No demos available.</p>';
+                    } else {
+                        demos.forEach(demo => {
+                            const demoItem = document.createElement('div');
+                            demoItem.className = 'demo-item';
+                            
+                            let displayPrompt = '';
+                            if (demo.main_prompt) {
+                                displayPrompt = demo.main_prompt;
+                            } else if (demo.prompt) {
+                                displayPrompt = demo.prompt;
+                            } else {
+                                displayPrompt = 'No prompt available.';
+                            }
+
+                            demoItem.innerHTML = `
+                                <h4>${demo.title}</h4>
+                                <p>Prompt: ${displayPrompt.substring(0, 100)}...</p>
+                                <p>Images: ${demo.images.length}</p>
+                                <p>Saved: ${new Date(demo.timestamp).toLocaleString()}</p>
+                            `;
+                            demoItem.addEventListener('click', () => {
+                                // TODO: Implement logic to load the selected demo
+                                alert(`Loading demo: ${demo.title}`);
+                                // Example: Populate main display with the first image
+                                if (demo.images.length > 0) {
+                                    // You would need a backend endpoint to convert GCS path to a viewable URL
+                                    // For now, let's just log the GCS path
+                                    console.log("Selected GCS Image Path:", demo.images[0]);
+                                    // A more complete solution would involve fetching the image from GCS via a Flask route
+                                    // uploadedImage.src = `/get_gcs_image/${encodeURIComponent(demo.images[0])}`;
+                                    // uploadedImage.style.display = 'block';
+                                    // placeholderText.style.display = 'none';
+                                    // maskCanvas.style.display = 'none';
+                                    // // Also load the prompt
+                                    // document.getElementById('promptTextarea').value = demo.prompt;
+                                    loadDemo(demo);
+                                }
+                                loadDemoModal.style.display = 'none'; // Close modal after selection
+                            });
+                            demoList.appendChild(demoItem);
+                        });
+
+                        // Add search functionality
+                        demoSearchInput.addEventListener('keyup', () => {
+                            const searchTerm = demoSearchInput.value.toLowerCase();
+                            demoList.querySelectorAll('.demo-item').forEach(item => {
+                                const title = item.querySelector('h4').textContent.toLowerCase();
+                                const prompt = item.querySelector('p:nth-of-type(1)').textContent.toLowerCase();
+                                if (title.includes(searchTerm) || prompt.includes(searchTerm)) {
+                                    item.style.display = 'block';
+                                } else {
+                                    item.style.display = 'none';
+                                }
+                            });
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error loading demos:', error);
+                    demoList.innerHTML = `<p style="color: red;">Error loading demos: ${error.message}</p>`;
+                }
+            });
+
+            closeButton.addEventListener('click', () => {
+                loadDemoModal.style.display = 'none';
+            });
+
+            window.addEventListener('click', (event) => {
+                if (event.target == loadDemoModal) {
+                    loadDemoModal.style.display = 'none';
+                }
+            });
+
+            // Close modal with Escape key
+            window.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && loadDemoModal.style.display === 'flex') {
+                    event.stopPropagation();
+                    loadDemoModal.style.display = 'none';
+                }
+            });
+
+            pasteFromClipboardBtn.addEventListener('click', async () => {
+                try {
+                    const permission = await navigator.permissions.query({ name: "clipboard-read" });
+                    if (permission.state === "denied") {
+                        alert("클립보드 읽기 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.");
+                        return;
+                    }
+
+                    const clipboardItems = await navigator.clipboard.read();
+                    for (const item of clipboardItems) {
+                        if (item.types.includes("image/png")) {
+                            const blob = await item.getType("image/png");
+                            handleImageFileAndReturnContainer(new File([blob], `clipboard_image_${Date.now()}.png`, { type: "image/png" }));
+                            return; // Process only the first image found
+                        }
+                    }
+                    alert("클립보드에 이미지 데이터가 없습니다.");
+                } catch (error) {
+                    console.error("클립보드에서 이미지 붙여넣기 실패:", error);
+                    alert(`클립보드에서 이미지를 붙여넣는 데 실패했습니다: ${error.message}. 브라우저가 클립보드 이미지 액세스를 지원하는지 확인하거나, 권한을 허용해주세요.`);
+                }
+            });
+
+            // Add event listeners to guideCanvas as well
+            guideCanvas.addEventListener('pointerdown', (e) => {
+                isDrawing = true;
+                const { x: mouseX, y: mouseY } = getCanvasMouseCoords(e);
+                [lastX, lastY] = [mouseX, mouseY];
+                if (currentTool === 'box') {
+                    [startX, startY] = [mouseX, mouseY];
+                    guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height); // Clear guideCanvas at start of drag
+                    guideCanvas.style.display = 'block'; // Show guideCanvas for box tool
+                    guideCanvas.style.opacity = '1'; // Show guideCanvas with opacity for box tool
+                }
+                e.preventDefault();
+            });
+
+            guideCanvas.addEventListener('pointermove', draw);
+
+            guideCanvas.addEventListener('pointerup', (e) => {
+                if (!isDrawing) return;
+                
+                if (currentTool === 'box') {
+                    // if (savedImageData) {
+                    //     ctx.putImageData(savedImageData, 0, 0);
+                    // } // This block should remain on maskCanvas event listener for final drawing
+                    // const { x: currentX, y: currentY } = getCanvasMouseCoords(e);
+                    // const width = currentX - startX;
+                    // const height = currentY - startY;
+                    // ctx.globalCompositeOperation = 'source-over';
+                    // ctx.fillStyle = brushColorInput.value;
+                    // ctx.fillRect(startX, startY, width, height);
+                    
+                    // savedImageData = null;
+                    // ctx.setLineDash([]); // Reset line dash
+                    // ctx.lineWidth = brushThicknessSlider.value; // Reset line width
+                    guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height); // Clear guideCanvas after drawing box
+                    guideCanvas.style.display = 'none'; // Hide guideCanvas for box tool
+                    guideCanvas.style.opacity = '0'; // Hide guideCanvas with opacity for box tool
+                }
+                
+                isDrawing = false;
+                // ctx.lineWidth = brushThicknessSlider.value; // No need to reset here
+            });
+
+            guideCanvas.addEventListener('pointerleave', () => isDrawing = false);
+
+            // Function to load and display prompt history
+            function loadPromptHistory() {
+                promptHistoryList.innerHTML = ''; // Clear previous entries
+                let promptHistory = JSON.parse(localStorage.getItem('promptHistory') || '[]');
+
+                if (promptHistory.length === 0) {
+                    promptHistoryList.innerHTML = '<p>No prompt history available.</p>';
+                    return;
+                }
+
+                promptHistory.slice().reverse().forEach((entry, index) => { // Show newest first
+                    const historyItem = document.createElement('div');
+                    historyItem.className = 'demo-item';
+                    historyItem.innerHTML = `
+                        <h4>${entry.header ? entry.header : ''} ${entry.prompt.substring(0, 100)}...</h4>
+                        <p>Saved: ${new Date(entry.timestamp).toLocaleString()}</p>
+                    `;
+                    historyItem.addEventListener('click', () => {
+                        document.getElementById('fixedPromptHeader').value = entry.header;
+                        document.getElementById('promptTextarea').value = entry.prompt;
+                        promptHistoryModal.style.display = 'none'; // Close modal after loading
+                    });
+                    promptHistoryList.appendChild(historyItem);
+                });
+
+                // Add search functionality for prompt history
+                promptHistorySearchInput.addEventListener('keyup', () => {
+                    const searchTerm = promptHistorySearchInput.value.toLowerCase();
+                    promptHistoryList.querySelectorAll('.demo-item').forEach(item => {
+                        const titleAndPrompt = item.querySelector('h4').textContent.toLowerCase();
+                        if (titleAndPrompt.includes(searchTerm)) {
+                            item.style.display = 'block';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                });
+            }
+
+            // Event listeners for prompt history modal
+            closePromptHistoryButton.addEventListener('click', () => {
+                promptHistoryModal.style.display = 'none';
+            });
+
+            window.addEventListener('click', (event) => {
+                if (event.target == promptHistoryModal) {
+                    promptHistoryModal.style.display = 'none';
+                }
+            });
+
+            // Close modal with Escape key
+            window.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && promptHistoryModal.style.display === 'flex') {
+                    event.stopPropagation();
+                    promptHistoryModal.style.display = 'none';
+                }
+            });
+
+            // Open prompt history modal on F1 key press
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'F1') {
+                    event.preventDefault(); // Prevent default browser help
+                    loadPromptHistory();
+                    promptHistoryModal.style.display = 'flex';
+                }
+            });
+        });
+    </script>
+
+    <!-- Load Demo Modal -->
+    <div id="loadDemoModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h3>Load Demo</h3>
+            <input type="text" id="demoSearchInput" placeholder="데모 검색..." class="prompt-textarea" style="margin-bottom: 10px;">
+            <div id="demoList" class="demo-list"></div>
+        </div>
+    </div>
+
+    <!-- Prompt History Modal -->
+    <div id="promptHistoryModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="closePromptHistoryButton">&times;</span>
+            <h3>Prompt History</h3>
+            <input type="text" id="promptHistorySearchInput" placeholder="프롬프트 기록 검색..." class="prompt-textarea" style="margin-bottom: 10px;">
+            <div id="promptHistoryList" class="demo-list"></div>
+        </div>
+    </div>
+</body>
+</html>

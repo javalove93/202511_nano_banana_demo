@@ -1,0 +1,7 @@
+**/websocat_debug.log
+**/.DS_Store
+*.pyc
+**/__pycache__
+**/*.wav
+**/*.webm
+**/*.png
