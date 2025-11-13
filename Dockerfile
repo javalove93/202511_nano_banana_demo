@@ -15,6 +15,7 @@ COPY requirements.txt .
 COPY .env .
 COPY *.py ./
 COPY templates/ templates/
+COPY static/ static/
 
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
