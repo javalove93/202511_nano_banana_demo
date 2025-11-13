@@ -13,62 +13,408 @@
         .user-actions form { display: inline-block; margin-right: 5px; }
         input[type="text"], input[type="password"], input[type="date"] { padding: 5px; }
         button { padding: 5px 10px; cursor: pointer; }
+        
+        /* Login Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 400px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+        }
+        #loginErrorMessage {
+            color: red;
+            margin-bottom: 10px;
+        }
+        #loadingMessage {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+        }
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <h1>User Account Management</h1>
+    <div id="loadingMessage">Loading...</div>
+    
+    <div id="mainContent" class="hidden">
+        <h1>User Account Management</h1>
 
-    <div class="form-container">
-        <h2>Add New User</h2>
-        <form action="{{ url_for('admin.add_user') }}" method="post">
-            <label for="user_id">User ID:</label>
-            <input type="text" id="user_id" name="user_id" required>
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required>
-            <label for="expiry_date">Expiry Date:</label>
-            <input type="date" id="expiry_date" name="expiry_date">
-            <button type="submit">Add User</button>
-        </form>
+        <div class="form-container">
+            <h2>Add New User</h2>
+            <form id="addUserForm">
+                <label for="user_id">User ID:</label>
+                <input type="text" id="user_id" name="user_id" required>
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+                <label for="expiry_date">Expiry Date:</label>
+                <input type="date" id="expiry_date" name="expiry_date">
+                <button type="submit">Add User</button>
+            </form>
+        </div>
+
+        <h2>Existing Users</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>Created At</th>
+                    <th>Expires At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="usersTableBody">
+                <!-- Users will be dynamically loaded here -->
+            </tbody>
+        </table>
     </div>
 
-    <h2>Existing Users</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>User ID</th>
-                <th>Created At</th>
-                <th>Expires At</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for user in users %}
-            <tr>
-                <td>{{ user.id }}</td>
-                <td>{{ user.created_at or 'N/A' }}</td>
-                <td>{{ user.expires_at or 'N/A' }}</td>
-                <td class="user-actions">
-                    <!-- Update Password -->
-                    <form action="{{ url_for('admin.update_password') }}" method="post">
-                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                        <input type="password" name="new_password" placeholder="New Password" required>
-                        <button type="submit">Update Password</button>
-                    </form>
-                    <!-- Update Expiry -->
-                    <form action="{{ url_for('admin.update_expiry') }}" method="post">
-                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                        <input type="date" name="expiry_date" required>
-                        <button type="submit">Update Expiry</button>
-                    </form>
-                    <!-- Delete User -->
-                    <form action="{{ url_for('admin.delete_user') }}" method="post">
-                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                        <button type="submit" onclick="return confirm('Are you sure you want to delete this user?');">Delete</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="closeLoginButton">&times;</span>
+            <h3>Admin Login</h3>
+            <p>관리자 로그인이 필요합니다.</p>
+            <form id="loginForm">
+                <div style="margin-bottom: 15px;">
+                    <label for="loginUserId" style="display: block; margin-bottom: 5px;">사용자 ID:</label>
+                    <input type="text" id="loginUserId" name="user_id" required 
+                           style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label for="loginPassword" style="display: block; margin-bottom: 5px;">비밀번호:</label>
+                    <input type="password" id="loginPassword" name="password" required
+                           style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+                </div>
+                <div id="loginErrorMessage" style="display: none;"></div>
+                <button type="submit" style="width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+                    로그인
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const loginModal = document.getElementById('loginModal');
+        const closeLoginButton = document.getElementById('closeLoginButton');
+        const loginForm = document.getElementById('loginForm');
+        const loginErrorMessage = document.getElementById('loginErrorMessage');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const mainContent = document.getElementById('mainContent');
+
+        // Check if user is logged in
+        function isLoggedIn() {
+            const token = localStorage.getItem('authToken');
+            return token !== null && token !== '';
+        }
+
+        // Show login modal
+        function showLoginModal() {
+            loginModal.style.display = 'flex';
+            loginErrorMessage.style.display = 'none';
+            document.getElementById('loginUserId').value = '';
+            document.getElementById('loginPassword').value = '';
+        }
+
+        // Hide login modal
+        function hideLoginModal() {
+            loginModal.style.display = 'none';
+        }
+
+        // Close login modal
+        closeLoginButton.addEventListener('click', hideLoginModal);
+
+        // Handle login form submission
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userId = document.getElementById('loginUserId').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            try {
+                const response = await fetch('/nano_banana/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        password: password
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || '로그인에 실패했습니다.');
+                }
+                
+                const data = await response.json();
+                
+                // Save token to localStorage
+                localStorage.setItem('authToken', data.token);
+                
+                // Hide login modal
+                hideLoginModal();
+                
+                // Load users data
+                await loadUsers();
+                
+            } catch (error) {
+                console.error('Login error:', error);
+                loginErrorMessage.textContent = error.message;
+                loginErrorMessage.style.display = 'block';
+            }
+        });
+
+        // Make authenticated fetch request
+        async function authenticatedFetch(url, options = {}) {
+            const token = localStorage.getItem('authToken');
+            
+            if (!token) {
+                throw new Error('No authentication token found');
+            }
+            
+            // Add Authorization header
+            options.headers = options.headers || {};
+            options.headers['Authorization'] = `Bearer ${token}`;
+            
+            const response = await fetch(url, options);
+            
+            // If unauthorized, clear token and show login
+            if (response.status === 401 || response.status === 403) {
+                localStorage.removeItem('authToken');
+                throw new Error('인증이 필요합니다. 다시 로그인해주세요.');
+            }
+            
+            return response;
+        }
+
+        // Load users data
+        async function loadUsers() {
+            try {
+                loadingMessage.style.display = 'block';
+                mainContent.classList.add('hidden');
+                
+                const response = await authenticatedFetch('/admin/users');
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load users');
+                }
+                
+                const users = await response.json();
+                
+                // Populate users table
+                const tbody = document.getElementById('usersTableBody');
+                tbody.innerHTML = '';
+                
+                users.forEach(user => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${user.id}</td>
+                        <td>${user.created_at || 'N/A'}</td>
+                        <td>${user.expires_at || 'N/A'}</td>
+                        <td class="user-actions">
+                            <form class="update-password-form" data-user-id="${user.id}">
+                                <input type="password" name="new_password" placeholder="New Password" required>
+                                <button type="submit">Update Password</button>
+                            </form>
+                            <form class="update-expiry-form" data-user-id="${user.id}">
+                                <input type="date" name="expiry_date" required>
+                                <button type="submit">Update Expiry</button>
+                            </form>
+                            <form class="delete-user-form" data-user-id="${user.id}">
+                                <button type="submit">Delete</button>
+                            </form>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                // Add event listeners for user actions
+                addUserActionListeners();
+                
+                loadingMessage.style.display = 'none';
+                mainContent.classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error loading users:', error);
+                loadingMessage.style.display = 'none';
+                
+                if (error.message.includes('인증')) {
+                    showLoginModal();
+                } else {
+                    alert('사용자 목록을 불러오는데 실패했습니다: ' + error.message);
+                }
+            }
+        }
+
+        // Add user action listeners
+        function addUserActionListeners() {
+            // Update password forms
+            document.querySelectorAll('.update-password-form').forEach(form => {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const userId = form.dataset.userId;
+                    const newPassword = form.querySelector('[name="new_password"]').value;
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('user_id', userId);
+                        formData.append('new_password', newPassword);
+                        
+                        const response = await authenticatedFetch('/admin/update_password', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (response.ok) {
+                            alert('비밀번호가 업데이트되었습니다.');
+                            form.reset();
+                        } else {
+                            throw new Error('Failed to update password');
+                        }
+                    } catch (error) {
+                        alert('비밀번호 업데이트 실패: ' + error.message);
+                    }
+                });
+            });
+
+            // Update expiry forms
+            document.querySelectorAll('.update-expiry-form').forEach(form => {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const userId = form.dataset.userId;
+                    const expiryDate = form.querySelector('[name="expiry_date"]').value;
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('user_id', userId);
+                        formData.append('expiry_date', expiryDate);
+                        
+                        const response = await authenticatedFetch('/admin/update_expiry', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (response.ok) {
+                            alert('만료일이 업데이트되었습니다.');
+                            await loadUsers(); // Reload to show updated date
+                        } else {
+                            throw new Error('Failed to update expiry date');
+                        }
+                    } catch (error) {
+                        alert('만료일 업데이트 실패: ' + error.message);
+                    }
+                });
+            });
+
+            // Delete user forms
+            document.querySelectorAll('.delete-user-form').forEach(form => {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const userId = form.dataset.userId;
+                    
+                    if (!confirm(`정말로 사용자 "${userId}"를 삭제하시겠습니까?`)) {
+                        return;
+                    }
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('user_id', userId);
+                        
+                        const response = await authenticatedFetch('/admin/delete_user', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (response.ok) {
+                            alert('사용자가 삭제되었습니다.');
+                            await loadUsers(); // Reload users list
+                        } else {
+                            throw new Error('Failed to delete user');
+                        }
+                    } catch (error) {
+                        alert('사용자 삭제 실패: ' + error.message);
+                    }
+                });
+            });
+        }
+
+        // Add user form
+        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userId = document.getElementById('user_id').value;
+            const password = document.getElementById('password').value;
+            const expiryDate = document.getElementById('expiry_date').value;
+            
+            try {
+                const formData = new FormData();
+                formData.append('user_id', userId);
+                formData.append('password', password);
+                if (expiryDate) {
+                    formData.append('expiry_date', expiryDate);
+                }
+                
+                const response = await authenticatedFetch('/admin/add_user', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    alert('사용자가 추가되었습니다.');
+                    document.getElementById('addUserForm').reset();
+                    await loadUsers(); // Reload users list
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(errorText);
+                }
+            } catch (error) {
+                alert('사용자 추가 실패: ' + error.message);
+            }
+        });
+
+        // Initialize page
+        async function initializePage() {
+            if (!isLoggedIn()) {
+                loadingMessage.style.display = 'none';
+                showLoginModal();
+            } else {
+                await loadUsers();
+            }
+        }
+
+        // Start initialization
+        initializePage();
+    </script>
 </body>
 </html>

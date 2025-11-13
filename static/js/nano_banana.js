@@ -1537,5 +1537,417 @@ document.addEventListener('DOMContentLoaded', function() {
             promptHistoryModal.style.display = 'flex';
         }
     });
+
+    // ===== Authentication Logic =====
+    
+    const loginModal = document.getElementById('loginModal');
+    const closeLoginButton = document.getElementById('closeLoginButton');
+    const loginForm = document.getElementById('loginForm');
+    const loginErrorMessage = document.getElementById('loginErrorMessage');
+    const resetLoginBtn = document.getElementById('resetLoginBtn');
+    
+    let pendingAction = null; // Store the action to execute after login
+    
+    // Check if user is logged in
+    function isLoggedIn() {
+        const token = localStorage.getItem('authToken');
+        return token !== null && token !== '';
+    }
+    
+    // Show login modal
+    function showLoginModal(action) {
+        pendingAction = action;
+        loginModal.style.display = 'flex';
+        loginErrorMessage.style.display = 'none';
+        document.getElementById('loginUserId').value = '';
+        document.getElementById('loginPassword').value = '';
+    }
+    
+    // Hide login modal
+    function hideLoginModal() {
+        loginModal.style.display = 'none';
+        pendingAction = null;
+    }
+    
+    // Close login modal when close button is clicked
+    closeLoginButton.addEventListener('click', hideLoginModal);
+    
+    // Close login modal when clicking outside
+    window.addEventListener('click', (event) => {
+        if (event.target === loginModal) {
+            hideLoginModal();
+        }
+    });
+    
+    // Reset login button - clear authentication token
+    resetLoginBtn.addEventListener('click', () => {
+        if (confirm('로그인 정보를 초기화하시겠습니까? 다시 로그인해야 합니다.')) {
+            localStorage.removeItem('authToken');
+            alert('로그인 정보가 초기화되었습니다. Generate 또는 Save Demo 기능을 사용하려면 다시 로그인해주세요.');
+        }
+    });
+    
+    // Handle login form submission
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const userId = document.getElementById('loginUserId').value;
+        const password = document.getElementById('loginPassword').value;
+        
+        try {
+            const response = await fetch('/nano_banana/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    password: password
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || '로그인에 실패했습니다.');
+            }
+            
+            const data = await response.json();
+            
+            // Save token to localStorage
+            localStorage.setItem('authToken', data.token);
+            
+            // Hide login modal
+            hideLoginModal();
+            
+            // Execute pending action if any
+            if (pendingAction) {
+                pendingAction();
+            }
+            
+        } catch (error) {
+            console.error('Login error:', error);
+            loginErrorMessage.textContent = error.message;
+            loginErrorMessage.style.display = 'block';
+        }
+    });
+    
+    // Make authenticated fetch request
+    async function authenticatedFetch(url, options = {}) {
+        const token = localStorage.getItem('authToken');
+        
+        if (!token) {
+            throw new Error('No authentication token found');
+        }
+        
+        // Add Authorization header
+        options.headers = options.headers || {};
+        options.headers['Authorization'] = `Bearer ${token}`;
+        
+        const response = await fetch(url, options);
+        
+        // If unauthorized, clear token and show login
+        if (response.status === 401) {
+            localStorage.removeItem('authToken');
+            throw new Error('인증이 필요합니다. 다시 로그인해주세요.');
+        }
+        
+        return response;
+    }
+    
+    // Wrap original generate button click handler with auth check
+    const originalGenerateHandler = generateBtn.onclick;
+    generateBtn.onclick = null; // Remove original onclick if exists
+    
+    // Remove the existing event listener and replace with auth-wrapped version
+    const newGenerateBtn = generateBtn.cloneNode(true);
+    generateBtn.parentNode.replaceChild(newGenerateBtn, generateBtn);
+    
+    // Add new event listener with auth check
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+        if (!isLoggedIn()) {
+            showLoginModal(async () => {
+                await handleGenerate();
+            });
+            return;
+        }
+        
+        await handleGenerate();
+    });
+    
+    // Move generate logic to separate function
+    async function handleGenerate() {
+        const fixedPromptHeader = document.getElementById('fixedPromptHeader').value;
+        const userPromptText = document.getElementById('promptTextarea').value;
+        const promptText = fixedPromptHeader + userPromptText;
+
+        if (promptText.trim()) {
+            const MAX_PROMPT_HISTORY = 20;
+            let promptHistory = JSON.parse(localStorage.getItem('promptHistory') || '[]');
+            promptHistory.push({ timestamp: new Date().toISOString(), header: fixedPromptHeader, prompt: userPromptText });
+            if (promptHistory.length > MAX_PROMPT_HISTORY) {
+                promptHistory = promptHistory.slice(promptHistory.length - MAX_PROMPT_HISTORY);
+            }
+            localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
+        }
+
+        const imagePlaceholders = sidebar.querySelectorAll('.image-placeholder');
+        
+        updateImageNumbering();
+
+        const selectedImagesData = [];
+
+        if (!coworkingCheckbox.checked) {
+            const anyImageSelected = sidebar.querySelectorAll('.image-placeholder .image-checkbox:checked').length > 0;
+            if (!anyImageSelected) {
+                const confirmGenerate = confirm('선택된 이미지가 없습니다. 이미지를 선택하지 않고 생성을 계속하시겠습니까?');
+                if (!confirmGenerate) {
+                    textResponseArea.textContent = '이미지 생성이 취소되었습니다.';
+                    return;
+                }
+            }
+        }
+
+        if (coworkingCheckbox.checked) {
+            if (imageCount >= 20) {
+                alert('이미지는 최대 20개까지 저장할 수 있습니다. 기존 이미지를 삭제해주세요.');
+                placeholderText.style.display = 'block';
+                placeholderText.textContent = '이미지를 여기에 드롭하거나 업로드하세요';
+                uploadedImage.style.display = 'none';
+                maskCanvas.style.display = 'none';
+                guideCanvas.style.opacity = '0';
+                return;
+            }
+            if (uploadedImage.style.display !== 'none' && uploadedImage.src) {
+                const mergedCanvas = document.createElement('canvas');
+                const mergedCtx = mergedCanvas.getContext('2d');
+
+                mergedCanvas.width = uploadedImage.naturalWidth;
+                mergedCanvas.height = uploadedImage.naturalHeight;
+
+                mergedCtx.drawImage(uploadedImage, 0, 0, mergedCanvas.width, mergedCanvas.height);
+
+                const scaleX = mergedCanvas.width / maskCanvas.width;
+                const scaleY = mergedCanvas.height / maskCanvas.height;
+
+                const drawX = -imageDisplayArea.scrollLeft * scaleX;
+                const drawY = -imageDisplayArea.scrollTop * scaleY;
+
+                mergedCtx.drawImage(maskCanvas, drawX, drawY, maskCanvas.width * scaleX, maskCanvas.height * scaleY);
+
+                const mergedImageDataUrl = mergedCanvas.toDataURL('image/png');
+
+                const newImgContainer = await handleImageFileAndReturnContainer(dataURLtoFile(mergedImageDataUrl, `coworking_image_${imageCount + 1}.png`));
+                
+                if (newImgContainer) {
+                    const allCheckboxes = sidebar.querySelectorAll('.image-checkbox');
+                    allCheckboxes.forEach(cb => {
+                        if (cb !== newImgContainer.querySelector('.image-checkbox')) {
+                            cb.checked = false;
+                        }
+                    });
+                    newImgContainer.querySelector('.image-checkbox').checked = true;
+                    updateImageNumbering();
+
+                    selectedImagesData.push(mergedImageDataUrl);
+                } else {
+                    alert('이미지는 최대 20개까지 저장할 수 있습니다. 기존 이미지를 삭제해주세요.');
+                    placeholderText.style.display = 'block';
+                    placeholderText.textContent = '이미지를 여기에 드롭하거나 업로드하세요';
+                    uploadedImage.style.display = 'none';
+                    maskCanvas.style.display = 'none';
+                    guideCanvas.style.opacity = '0';
+                    return;
+                }
+            }
+        } else {
+            for (const imgContainer of imagePlaceholders) {
+                const checkbox = imgContainer.querySelector('.image-checkbox');
+                if (checkbox && checkbox.checked) {
+                    const img = imgContainer.querySelector('img');
+                    if (img) {
+                        const base64Image = await getImageBase64(img);
+                        selectedImagesData.push(base64Image);
+                    }
+                }
+            }
+        }
+        
+        if (!promptText.trim()) {
+            alert('프롬프트를 입력해주세요.');
+            textResponseArea.textContent = '프롬프트가 비어있습니다.';
+            return;
+        }
+
+        console.log("Selected images data sent to server:", selectedImagesData.length, "images");
+        if (selectedImagesData.length > 0) {
+            console.log("First image data (snippet):", selectedImagesData[0].substring(0, 100));
+        }
+
+        textResponseArea.textContent = 'Generating...';
+
+        try {
+            const response = await authenticatedFetch('/generate_nano_banana', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    prompt: promptText,
+                    images: selectedImagesData
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Server response error:', response.status, errorText);
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let result = '';
+            let firstChunk = true;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                result += chunk;
+
+                const lines = result.split('\n\n');
+                result = lines.pop();
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const jsonStr = line.substring(6);
+                        try {
+                            const data = JSON.parse(jsonStr);
+                            if (firstChunk) {
+                                placeholderText.style.display = 'none';
+                                firstChunk = false;
+                            }
+
+                            if (data.type === 'image_url') {
+                                if (imageCount < 20) {
+                                    fetch(data.url)
+                                        .then(res => res.blob())
+                                        .then(blob => {
+                                            const file = new File([blob], `generated_image_${imageCount + 1}.png`, { type: 'image/png' });
+                                            handleImageFileAndReturnContainer(file);
+                                        })
+                                        .catch(error => console.error('Error fetching generated image:', error));
+                                } else {
+                                    alert('이미지는 최대 20개까지 저장할 수 있습니다. 기존 이미지를 삭제해주세요.');
+                                }
+                                guideCanvas.style.opacity = '0';
+                            } else if (data.type === 'text') {
+                                console.log("Generated Text: ", data.data);
+                                textResponseArea.textContent += data.data;
+                            } else if (data.type === 'error') {
+                                textResponseArea.textContent = `Error: ${data.data}`;
+                                reader.cancel();
+                                return;
+                            } else if (data.type === 'stream_end') {
+                                console.log("Stream End Message: ", data.data);
+                                textResponseArea.textContent += `\n${data.data}`;
+                                console.log("Stream end message displayed.");
+                            }
+                        } catch (parseError) {
+                            console.error('JSON 파싱 오류:', parseError, '데이터:', jsonStr);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Fetch API failed:', error);
+            textResponseArea.textContent = `An error occurred: ${error.message}`;
+            
+            // If authentication error, show login modal
+            if (error.message.includes('인증')) {
+                showLoginModal(handleGenerate);
+            }
+        }
+    }
+    
+    // Wrap saveDemoBtn with auth check
+    const newSaveDemoBtn = document.getElementById('saveDemoBtn').cloneNode(true);
+    document.getElementById('saveDemoBtn').parentNode.replaceChild(newSaveDemoBtn, document.getElementById('saveDemoBtn'));
+    
+    newSaveDemoBtn.addEventListener('click', async () => {
+        if (!isLoggedIn()) {
+            showLoginModal(async () => {
+                await handleSaveDemo();
+            });
+            return;
+        }
+        
+        await handleSaveDemo();
+    });
+    
+    // Move save demo logic to separate function
+    async function handleSaveDemo() {
+        const demoTitle = prompt("저장할 데모의 제목을 입력하세요:");
+        if (!demoTitle) {
+            alert("데모 제목이 필요합니다.");
+            return;
+        }
+
+        const promptText = document.getElementById('fixedPromptHeader').value + document.getElementById('promptTextarea').value;
+        const imagePlaceholders = sidebar.querySelectorAll('.image-placeholder');
+        const selectedImagesData = [];
+
+        for (const imgContainer of imagePlaceholders) {
+            const checkbox = imgContainer.querySelector('.image-checkbox');
+            if (checkbox && checkbox.checked) {
+                const img = imgContainer.querySelector('img');
+                if (img) {
+                    const base64Image = await getImageBase64(img);
+                    selectedImagesData.push(base64Image);
+                }
+            }
+        }
+
+        if (selectedImagesData.length === 0) {
+            alert("데모에 저장할 이미지를 하나 이상 선택해주세요.");
+            return;
+        }
+
+        textResponseArea.textContent = 'Saving demo...';
+
+        try {
+            const response = await authenticatedFetch('/save_nano_banana_demo', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: demoTitle,
+                    fixed_prompt_header: document.getElementById('fixedPromptHeader').value,
+                    main_prompt: document.getElementById('promptTextarea').value,
+                    images: selectedImagesData
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+            }
+
+            const result = await response.json();
+            textResponseArea.textContent = `Demo saved successfully: ${result.message}`;
+            alert('데모가 성공적으로 저장되었습니다!');
+
+        } catch (error) {
+            console.error('Save Demo API failed:', error);
+            textResponseArea.textContent = `Error saving demo: ${error.message}`;
+            alert(`데모 저장 중 오류 발생: ${error.message}`);
+            
+            // If authentication error, show login modal
+            if (error.message.includes('인증')) {
+                showLoginModal(handleSaveDemo);
+            }
+        }
+    }
 });
 

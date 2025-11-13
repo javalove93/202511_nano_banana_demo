@@ -7,3 +7,4 @@ firebase-admin
 google-cloud-storage
 google-cloud-firestore
 Werkzeug
+PyJWT

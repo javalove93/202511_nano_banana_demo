@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, Response, send_from_directory, after_this_request, current_app
+from flask import Blueprint, render_template, request, Response, send_from_directory, after_this_request, current_app, jsonify, g
 import json
 import os
 import base64
@@ -8,6 +8,10 @@ from PIL import Image
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+import jwt
+from datetime import datetime, timedelta
+from functools import wraps
+from werkzeug.security import check_password_hash
 
 # Import Firebase Admin SDK
 import firebase_admin
@@ -24,6 +28,9 @@ load_dotenv()
 
 FIRESTORE_COLLECTION_ID = os.environ.get('FIRESTORE_COLLECTION_ID', 'nanobanana')
 FIRESTORE_DATABASE_ID = os.environ.get('FIRESTORE_DATABASE_ID')
+ACCOUNTS_COLLECTION = os.environ.get('ACCOUNTS_ID', 'user_accounts')
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-this')
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
 
 def parse_gcs_path(gcs_path):
     if gcs_path.startswith("gs://"):
@@ -54,6 +61,130 @@ else:
 gcs_client = gcs.Client()
 
 
+def token_required(admin_only=False):
+    """
+    토큰 검증 데코레이터
+    admin_only=True일 경우 관리자 권한도 확인
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            token = None
+            
+            # Authorization 헤더에서 토큰 추출
+            if 'Authorization' in request.headers:
+                auth_header = request.headers['Authorization']
+                try:
+                    token = auth_header.split(' ')[1]  # "Bearer <token>"에서 토큰 추출
+                except IndexError:
+                    return jsonify({'message': 'Invalid token format'}), 401
+            
+            if not token:
+                return jsonify({'message': 'Token is missing'}), 401
+            
+            try:
+                # 토큰 디코딩
+                data = jwt.decode(token, JWT_SECRET_KEY, algorithms=['HS256'])
+                user_id = data['user_id']
+                
+                # Firestore에서 사용자 정보 조회
+                user_ref = db.collection(ACCOUNTS_COLLECTION).document(user_id)
+                user_doc = user_ref.get()
+                
+                if not user_doc.exists:
+                    return jsonify({'message': 'User not found'}), 401
+                
+                user_data = user_doc.to_dict()
+                
+                # 만료일 확인
+                if 'expires_at' in user_data:
+                    expires_at = user_data['expires_at']
+                    # Firestore timestamp를 datetime으로 변환
+                    if hasattr(expires_at, 'timestamp'):
+                        expires_at = datetime.fromtimestamp(expires_at.timestamp())
+                    elif isinstance(expires_at, datetime):
+                        pass
+                    else:
+                        return jsonify({'message': 'Invalid expiry date format'}), 401
+                    
+                    # 만료일이 현재 시간보다 이전인지 확인
+                    if expires_at < datetime.now():
+                        return jsonify({'message': 'Account has expired'}), 401
+                
+                # 관리자 권한 확인
+                if admin_only and user_id != ADMIN_USERNAME:
+                    return jsonify({'message': 'Admin access required'}), 403
+                
+                # 사용자 정보를 g 객체에 저장
+                g.user = {'user_id': user_id, 'data': user_data}
+                
+            except jwt.ExpiredSignatureError:
+                return jsonify({'message': 'Token has expired'}), 401
+            except jwt.InvalidTokenError:
+                return jsonify({'message': 'Invalid token'}), 401
+            except Exception as e:
+                current_app.logger.error(f"Token validation error: {e}")
+                return jsonify({'message': 'Token validation failed'}), 401
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+@nano_banana_bp.route('/nano_banana/login', methods=['POST'])
+def login():
+    """
+    로그인 API 엔드포인트
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        password = data.get('password')
+        
+        if not user_id or not password:
+            return jsonify({'message': 'User ID and password are required'}), 400
+        
+        # Firestore에서 사용자 조회
+        user_ref = db.collection(ACCOUNTS_COLLECTION).document(user_id)
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            return jsonify({'message': 'Invalid credentials'}), 401
+        
+        user_data = user_doc.to_dict()
+        
+        # 비밀번호 확인
+        if not check_password_hash(user_data.get('password', ''), password):
+            return jsonify({'message': 'Invalid credentials'}), 401
+        
+        # 만료일 확인
+        if 'expires_at' in user_data:
+            expires_at = user_data['expires_at']
+            # Firestore timestamp를 datetime으로 변환
+            if hasattr(expires_at, 'timestamp'):
+                expires_at = datetime.fromtimestamp(expires_at.timestamp())
+            elif isinstance(expires_at, datetime):
+                pass
+            else:
+                return jsonify({'message': 'Invalid expiry date format'}), 401
+            
+            # 만료일이 현재 시간보다 이전인지 확인
+            if expires_at < datetime.now():
+                return jsonify({'message': 'Account has expired'}), 401
+        
+        # JWT 토큰 생성
+        token = jwt.encode({
+            'user_id': user_id,
+            'exp': datetime.utcnow() + timedelta(days=7)  # 7일 유효기간
+        }, JWT_SECRET_KEY, algorithm='HS256')
+        
+        return jsonify({'token': token}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Login error: {e}")
+        return jsonify({'message': 'Login failed'}), 500
+
+
 @nano_banana_bp.route('/nano_banana')
 def index():
     return render_template('nano_banana.html')
@@ -78,6 +209,7 @@ def save_binary_file(file_name, data, directory=None, logger=None):
 
 
 @nano_banana_bp.route('/generate_nano_banana', methods=['POST'])
+@token_required()
 def generate_nano_banana():
     app_logger = current_app.logger # Get the logger from the app context
     app_logger.info("Starting image generation process...")
@@ -192,6 +324,7 @@ def get_generated_image(filename):
 
 
 @nano_banana_bp.route('/save_nano_banana_demo', methods=['POST'])
+@token_required()
 def save_nano_banana_demo():
     app_logger = current_app.logger
     app_logger.info("Starting save demo process...")
