@@ -16,6 +16,7 @@ from google.genai.types import (
 )
 
 from app_nano_banana import nano_banana_bp
+from app_admin import admin_bp
 import logging # Add this line
 
 # .env 파일에서 환경 변수 로드
@@ -37,6 +38,7 @@ handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -
 werkzeug_logger.addHandler(handler)
 
 app.register_blueprint(nano_banana_bp)
+app.register_blueprint(admin_bp)
 
 # 환경 변수에서 프로젝트 ID 가져오기
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT_ID")

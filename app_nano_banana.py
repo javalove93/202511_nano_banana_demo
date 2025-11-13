@@ -48,7 +48,7 @@ if not firebase_admin._apps:
     })
 
 if FIRESTORE_DATABASE_ID:
-    db = firestore.client(database=FIRESTORE_DATABASE_ID)
+    db = firestore.client(database_id=FIRESTORE_DATABASE_ID)
 else:
     db = firestore.client()
 gcs_client = gcs.Client()

@@ -1,0 +1,11 @@
+---
+description: Make a plan file on code change
+globs: "/*"
+alwaysApply: true
+---
+# Make a plan first
+- Give a title to the plan. Format is "YYYYMMDD HHMM comprehensive title" (timezone is GMT+9)
+- Create it as markdown file at /plans/ folder
+- Reuse the plan file as much as possible
+  - If there is a modification of plan, resive it
+- Naver start implementation before my confirmation on the plan
